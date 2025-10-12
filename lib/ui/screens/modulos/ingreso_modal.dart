@@ -1,137 +1,209 @@
 import 'package:flutter/material.dart';
-import '../../../core/dao/equipo_dao.dart';
 import '../../../core/dao/ingreso_dao.dart';
+import '../../../core/dao/equipo_dao.dart';
 import '../../../core/models/ingreso.dart';
+import '../../../core/models/equipo.dart';
 import '../../theme/app_colors.dart';
-import 'equipo_modal.dart'; // 👈 Importa aquí
 
-Future<void> mostrarIngresoModal(BuildContext context, [int? idCliente]) async {
-  final equipoDao = EquipoDao();
+Future<void> mostrarIngresoModal(BuildContext context, int i) async {
   final ingresoDao = IngresoDao();
+  final equipoDao = EquipoDao();
 
-  final equipos = await equipoDao.listarPorCliente(idCliente!);
-  int? equipoSeleccionado;
   final accesoriosCtrl = TextEditingController();
-  final obsCtrl = TextEditingController();
+  final observacionesCtrl = TextEditingController();
+
+  List<Equipo> equipos = [];
+  Equipo? equipoSeleccionado;
+
+  // Cargar equipos existentes desde la BD
+  equipos = await equipoDao.listar();
 
   await showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (_) => AlertDialog(
-      backgroundColor: AppColors.fondo,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      title: const Text(
-        'Registrar ingreso',
-        style: TextStyle(color: Colors.white),
-      ),
-      content: StatefulBuilder(
-        builder: (context, setState) => SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<int>(
-                initialValue: equipoSeleccionado,
-                items: [
-                  ...equipos.map(
-                    (e) => DropdownMenuItem(
-                      value: e.id_equipo,
-                      child: Text(
-                        '${e.tipo_equipo} ${e.marca} (${e.modelo})',
-                        style: const TextStyle(color: Colors.white),
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: AppColors.fondo.withOpacity(0.95),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: const Text(
+              'Registrar nuevo ingreso',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Selección del equipo
+                  DropdownButtonFormField<Equipo>(
+                    dropdownColor: AppColors.fondo,
+                    value: equipoSeleccionado,
+                    items: equipos.map((e) {
+                      return DropdownMenuItem<Equipo>(
+                        value: e,
+                        child: Text(
+                          '${e.tipo_equipo} - ${e.marca} (${e.modelo})',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (nuevo) {
+                      setState(() => equipoSeleccionado = nuevo);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Equipo',
+                      labelStyle: const TextStyle(color: Colors.white70),
+                      prefixIcon: const Icon(
+                        Icons.devices,
+                        color: Colors.tealAccent,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: const OutlineInputBorder(
+                        borderSide: BorderSide(color: Colors.tealAccent),
+                      ),
+                    ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Accesorios con chips sugeridos
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 6,
+                      children:
+                          [
+                            'Cargador',
+                            'Mochila',
+                            'Mouse',
+                            'Cable USB',
+                            'Adaptador',
+                          ].map((item) {
+                            return FilterChip(
+                              label: Text(item),
+                              labelStyle: const TextStyle(color: Colors.white),
+                              selectedColor: Colors.tealAccent.withOpacity(0.3),
+                              backgroundColor: Colors.white10,
+                              selected: accesoriosCtrl.text.contains(item),
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    accesoriosCtrl.text +=
+                                        (accesoriosCtrl.text.isEmpty
+                                            ? ''
+                                            : ', ') +
+                                        item;
+                                  } else {
+                                    accesoriosCtrl.text = accesoriosCtrl.text
+                                        .replaceAll(item, '')
+                                        .replaceAll(',,', ',')
+                                        .trim()
+                                        .replaceAll(RegExp(r'(^, |, $)'), '');
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Observaciones
+                  TextField(
+                    controller: observacionesCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: 'Observaciones',
+                      labelStyle: const TextStyle(color: Colors.white70),
+                      prefixIcon: const Icon(
+                        Icons.note_alt,
+                        color: Colors.tealAccent,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: const OutlineInputBorder(
+                        borderSide: BorderSide(color: Colors.tealAccent),
                       ),
                     ),
                   ),
-                  const DropdownMenuItem(
-                    value: -1,
-                    child: Text('➕ Crear nuevo equipo'),
-                  ),
                 ],
-                dropdownColor: AppColors.fondo,
-                decoration: const InputDecoration(
-                  labelText: 'Equipo',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  border: OutlineInputBorder(),
+              ),
+            ),
+            actionsAlignment: MainAxisAlignment.spaceBetween,
+            actions: [
+              TextButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                label: const Text('Cancelar'),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.tealAccent.withOpacity(0.2),
+                  foregroundColor: Colors.tealAccent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                onChanged: (val) async {
-                  if (val == -1) {
-                    // Abrir modal de equipo
-                    final nuevoId = await mostrarEquipoModal(
-                      context,
-                      idCliente,
+                icon: const Icon(Icons.save),
+                label: const Text('Guardar ingreso'),
+                onPressed: () async {
+                  if (equipoSeleccionado == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Por favor selecciona un equipo'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
                     );
-                    if (nuevoId != null) {
-                      final listaActualizada = await equipoDao.listarPorCliente(
-                        idCliente,
+                    return;
+                  }
+
+                  final nuevo = Ingreso(
+                    id_equipo: equipoSeleccionado!.id_equipo!,
+                    fecha_ingreso: DateTime.now().toIso8601String(),
+                    accesorios: accesoriosCtrl.text.trim(),
+                    observaciones: observacionesCtrl.text.trim(),
+                    estado_ingreso: 'pendiente',
+                  );
+
+                  try {
+                    await ingresoDao.insertar(nuevo);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('✅ Ingreso registrado correctamente'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
                       );
-                      setState(() {
-                        equipoSeleccionado = nuevoId;
-                        equipos.clear();
-                        equipos.addAll(listaActualizada);
-                      });
                     }
-                  } else {
-                    setState(() => equipoSeleccionado = val);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('❌ Error al guardar: $e'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
                   }
                 },
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: accesoriosCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Accesorios',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: obsCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Observaciones',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  border: OutlineInputBorder(),
-                ),
-              ),
             ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-            if (equipoSeleccionado == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Debe seleccionar o crear un equipo.'),
-                ),
-              );
-              return;
-            }
-
-            final ingreso = Ingreso(
-              id_equipo: equipoSeleccionado!,
-              fecha_ingreso: DateTime.now().toIso8601String(),
-              accesorios: accesoriosCtrl.text,
-              observaciones: obsCtrl.text,
-              estado_ingreso: 'pendiente',
-            );
-
-            await ingresoDao.insertar(ingreso);
-            if (context.mounted) Navigator.pop(context);
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Ingreso registrado correctamente')),
-            );
-          },
-          child: const Text('Guardar ingreso'),
-        ),
-      ],
-    ),
+          );
+        },
+      );
+    },
   );
 }

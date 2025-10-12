@@ -5,8 +5,14 @@ import 'menu_lateral.dart';
 class LayoutPrincipal extends StatefulWidget {
   final Widget child;
   final String titulo;
+  final Widget? floatingActionButton; // 👈 Nuevo parámetro opcional
 
-  const LayoutPrincipal({super.key, required this.child, required this.titulo});
+  const LayoutPrincipal({
+    super.key,
+    required this.child,
+    required this.titulo,
+    this.floatingActionButton, // 👈 agregado
+  });
 
   @override
   State<LayoutPrincipal> createState() => _LayoutPrincipalState();
@@ -54,6 +60,7 @@ class _LayoutPrincipalState extends State<LayoutPrincipal> {
       ),
       drawer: MenuLateral(onSelect: _navegar, correo: _correo, nombre: _nombre),
       body: widget.child,
+      floatingActionButton: widget.floatingActionButton, // 👈 agregado aquí
     );
   }
 }

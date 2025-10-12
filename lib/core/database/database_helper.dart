@@ -234,16 +234,22 @@ class DatabaseHelper {
 
   Future<void> _createReparaciones(Database db) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS reparaciones (
-        id_reparacion INTEGER PRIMARY KEY AUTOINCREMENT,
-        id_diagnostico INTEGER NOT NULL,
-        descripcion_trabajo TEXT,
-        observaciones TEXT,
-        fecha_inicio TEXT,
-        estado TEXT,
-        FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE
-      );
-    ''');
+    CREATE TABLE IF NOT EXISTS reparaciones (
+      id_reparacion INTEGER PRIMARY KEY AUTOINCREMENT,
+      id_diagnostico INTEGER NOT NULL,
+      id_tecnico INTEGER,
+      descripcion TEXT,
+      fecha_inicio TEXT,
+      fecha_fin TEXT,
+      estado TEXT DEFAULT 'pendiente', -- pendiente | en_proceso | finalizada
+      notas TEXT,
+      FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE,
+      FOREIGN KEY (id_tecnico) REFERENCES usuarios(id_usuario) ON DELETE SET NULL
+    );
+  ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_reparaciones_diag ON reparaciones(id_diagnostico);',
+    );
   }
 
   Future<void> _createInformes(Database db) async {

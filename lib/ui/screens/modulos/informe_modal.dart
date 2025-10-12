@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import '../../../core/dao/reparacion_dao.dart';
-import '../../../core/models/reparacion.dart';
+import '../../../core/dao/informe_dao.dart';
+import '../../../core/models/informe.dart';
 import '../../theme/app_colors.dart';
 
-Future<void> mostrarReparacionModal(
+Future<void> mostrarInformeModal(
   BuildContext context,
   int idDiagnostico,
 ) async {
-  final dao = ReparacionDao();
+  final dao = InformeDao();
 
   final descripcionCtrl = TextEditingController();
-  final notasCtrl = TextEditingController();
-  String estado = 'pendiente';
-  int? tecnicoSeleccionado; // luego se usará lista real desde usuarios
+  final conclusionesCtrl = TextEditingController();
+  final recomendacionesCtrl = TextEditingController();
+  int? tecnicoSeleccionado;
 
   final List<Map<String, dynamic>> tecnicos = [
     {'id': 1, 'nombre': 'Gonzalo Castillo'},
@@ -32,7 +32,7 @@ Future<void> mostrarReparacionModal(
               borderRadius: BorderRadius.circular(18),
             ),
             title: const Text(
-              'Iniciar reparación',
+              'Crear informe técnico',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -41,12 +41,21 @@ Future<void> mostrarReparacionModal(
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _campoTexto(
+                  _campo(
                     descripcionCtrl,
-                    'Descripción del trabajo a realizar',
-                    Icons.build_circle_outlined,
+                    'Descripción general',
+                    Icons.description,
+                  ),
+                  _campo(
+                    conclusionesCtrl,
+                    'Conclusiones',
+                    Icons.fact_check_outlined,
+                  ),
+                  _campo(
+                    recomendacionesCtrl,
+                    'Recomendaciones',
+                    Icons.lightbulb_outline,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
@@ -57,7 +66,7 @@ Future<void> mostrarReparacionModal(
                         Icons.engineering,
                         color: Colors.tealAccent,
                       ),
-                      labelText: 'Técnico asignado',
+                      labelText: 'Técnico responsable',
                       labelStyle: const TextStyle(color: Colors.white70),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -76,52 +85,9 @@ Future<void> mostrarReparacionModal(
                         .toList(),
                     onChanged: (v) => setState(() => tecnicoSeleccionado = v),
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: estado,
-                    dropdownColor: AppColors.fondo,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(
-                        Icons.flag,
-                        color: Colors.tealAccent,
-                      ),
-                      labelText: 'Estado inicial',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'pendiente',
-                        child: Text(
-                          'Pendiente',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      DropdownMenuItem(
-                        value: 'en_proceso',
-                        child: Text(
-                          'En proceso',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      DropdownMenuItem(
-                        value: 'finalizada',
-                        child: Text(
-                          'Finalizada',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                    onChanged: (v) => setState(() => estado = v!),
-                  ),
-                  const SizedBox(height: 12),
-                  _campoTexto(notasCtrl, 'Notas adicionales', Icons.note_alt),
                 ],
               ),
             ),
-            actionsAlignment: MainAxisAlignment.spaceBetween,
             actions: [
               TextButton.icon(
                 onPressed: () => Navigator.pop(context),
@@ -137,54 +103,38 @@ Future<void> mostrarReparacionModal(
                   ),
                 ),
                 icon: const Icon(Icons.save),
-                label: const Text('Guardar reparación'),
+                label: const Text('Guardar informe'),
                 onPressed: () async {
                   if (descripcionCtrl.text.isEmpty ||
                       tecnicoSeleccionado == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text(
-                          'Completa la descripción y selecciona técnico',
-                        ),
-                        behavior: SnackBarBehavior.floating,
+                        content: Text('Completa los campos requeridos'),
                       ),
                     );
                     return;
                   }
 
-                  final reparacion = Reparacion(
+                  final informe = Informe(
                     idDiagnostico: idDiagnostico,
                     idTecnico: tecnicoSeleccionado,
-                    descripcion: descripcionCtrl.text,
-                    fechaInicio: DateTime.now().toIso8601String(),
-                    fechaFin: null,
-                    estado: estado,
-                    notas: notasCtrl.text,
+                    descripcionGeneral: descripcionCtrl.text,
+                    conclusiones: conclusionesCtrl.text,
+                    recomendaciones: recomendacionesCtrl.text,
+                    fechaCreacion: DateTime.now().toIso8601String(),
                   );
 
-                  try {
-                    await dao.insertar(reparacion);
+                  await dao.insertar(informe);
 
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            '✅ Reparación registrada correctamente',
-                          ),
-                          behavior: SnackBarBehavior.floating,
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          '✅ Informe técnico guardado correctamente',
                         ),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('❌ Error al guardar: $e'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
+                      ),
+                    );
                   }
                 },
               ),
@@ -196,7 +146,7 @@ Future<void> mostrarReparacionModal(
   );
 }
 
-Widget _campoTexto(TextEditingController ctrl, String label, IconData icono) {
+Widget _campo(TextEditingController ctrl, String label, IconData icono) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 6),
     child: TextField(

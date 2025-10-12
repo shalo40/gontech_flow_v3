@@ -5,18 +5,12 @@ import '../dao/ingreso_dao.dart';
 import '../dao/diagnostico_dao.dart';
 import '../dao/presupuesto_dao.dart';
 import '../dao/repuesto_dao.dart';
-import '../dao/informe_dao.dart';
 import '../dao/entrega_dao.dart';
-import '../dao/historial_dao.dart';
 import '../models/cliente.dart';
 import '../models/equipo.dart';
 import '../models/ingreso.dart';
 import '../models/diagnostico.dart';
 import '../models/presupuesto.dart';
-import '../models/repuesto.dart';
-import '../models/informe.dart';
-import '../models/entrega.dart';
-import '../models/historial.dart';
 
 /// 🚀 Cargador de datos de demostración Gontech Flow v3.
 /// 100 % alineado con las tablas y claves foráneas definidas en database_helper.dart

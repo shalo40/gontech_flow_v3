@@ -160,7 +160,7 @@ class _IngresosScreenState extends State<IngresosScreen> {
             padding: const EdgeInsets.only(bottom: 16),
             child: FloatingActionButton.extended(
               onPressed: () async {
-                await mostrarIngresoModal(context);
+                await mostrarIngresoModal(context, cargar as int);
                 await cargar();
               },
               icon: const Icon(Icons.add),

@@ -4,31 +4,61 @@ import '../models/reparacion.dart';
 class ReparacionDao {
   final dbProvider = DatabaseHelper();
 
-  Future<int> insertar(Reparacion reparacion) async {
+  Future<int> insertar(Reparacion r) async {
     final db = await dbProvider.db;
-    return await db.insert('reparaciones', reparacion.toMap());
+    return await db.insert('reparaciones', r.toMap());
+  }
+
+  Future<List<Reparacion>> listarPorDiagnostico(int idDiagnostico) async {
+    final db = await dbProvider.db;
+    final res = await db.query(
+      'reparaciones',
+      where: 'id_diagnostico = ?',
+      whereArgs: [idDiagnostico],
+      orderBy: 'id_reparacion DESC',
+    );
+    return res.map((e) => Reparacion.fromMap(e)).toList();
+  }
+
+  Future<void> actualizarEstado(int idReparacion, String nuevoEstado) async {
+    final db = await dbProvider.db;
+    await db.update(
+      'reparaciones',
+      {'estado': nuevoEstado, 'fecha_fin': DateTime.now().toIso8601String()},
+      where: 'id_reparacion = ?',
+      whereArgs: [idReparacion],
+    );
+  }
+
+  Future<void> eliminar(int idReparacion) async {
+    final db = await dbProvider.db;
+    await db.delete(
+      'reparaciones',
+      where: 'id_reparacion = ?',
+      whereArgs: [idReparacion],
+    );
   }
 
   Future<List<Map<String, dynamic>>> listarDetallado() async {
     final db = await dbProvider.db;
-    final res = await db.rawQuery('''
-      SELECT r.*, d.descripcion_falla, e.marca, e.tipo_equipo, i.id_ingreso
+    return await db.rawQuery('''
+      SELECT 
+        r.id_reparacion,
+        r.descripcion,
+        r.estado,
+        r.fecha_inicio,
+        r.fecha_fin,
+        r.notas,
+        d.descripcion_falla,
+        d.conclusiones,
+        e.marca, e.modelo,
+        c.nombre AS cliente
       FROM reparaciones r
       LEFT JOIN diagnosticos d ON r.id_diagnostico = d.id_diagnostico
-      LEFT JOIN ingresos i ON d.id_ingreso = i.id_ingreso
-      LEFT JOIN equipos e ON i.id_equipo = e.id_equipo
-      ORDER BY r.id_reparacion DESC
+      LEFT JOIN ingresos i     ON d.id_ingreso = i.id_ingreso
+      LEFT JOIN equipos e      ON i.id_equipo = e.id_equipo
+      LEFT JOIN clientes c     ON e.id_cliente = c.id_cliente
+      ORDER BY r.id_reparacion DESC;
     ''');
-    return res;
-  }
-
-  Future<int> actualizarEstado(int idReparacion, String nuevoEstado) async {
-    final db = await dbProvider.db;
-    return await db.update(
-      'reparaciones',
-      {'estado': nuevoEstado},
-      where: 'id_reparacion = ?',
-      whereArgs: [idReparacion],
-    );
   }
 }
