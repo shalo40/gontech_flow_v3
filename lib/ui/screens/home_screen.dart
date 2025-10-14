@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:gontech_flow_v2/ui/layout/layout_principal.dart';
+import '../../../core/dao/cliente_dao.dart';
+import '../../../core/dao/equipo_dao.dart';
+import '../../../core/dao/ingreso_dao.dart';
+import '../../../core/dao/diagnostico_dao.dart';
+import '../../../core/dao/presupuesto_dao.dart';
+import '../../../core/dao/reparacion_dao.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/app_colors.dart';
 
@@ -15,44 +21,25 @@ class _HomeScreenState extends State<HomeScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnim;
 
-  final List<Map<String, dynamic>> _resumenes = [
-    {
-      'titulo': 'Clientes',
-      'icono': Icons.group,
-      'color': Colors.blueAccent,
-      'valor': 23,
-    },
-    {
-      'titulo': 'Equipos',
-      'icono': Icons.devices,
-      'color': Colors.purpleAccent,
-      'valor': 42,
-    },
-    {
-      'titulo': 'Ingresos',
-      'icono': Icons.receipt_long,
-      'color': Colors.greenAccent,
-      'valor': 12,
-    },
-    {
-      'titulo': 'Diagnósticos',
-      'icono': Icons.biotech,
-      'color': Colors.orangeAccent,
-      'valor': 8,
-    },
-    {
-      'titulo': 'Presupuestos',
-      'icono': Icons.attach_money,
-      'color': Colors.tealAccent,
-      'valor': 5,
-    },
-    {
-      'titulo': 'Reparaciones',
-      'icono': Icons.build,
-      'color': Colors.amberAccent,
-      'valor': 7,
-    },
-  ];
+  // DAOs
+  final clienteDao = ClienteDao();
+  final equipoDao = EquipoDao();
+  final ingresoDao = IngresoDAO();
+  final diagnosticoDao = DiagnosticoDao();
+  final presupuestoDao = PresupuestoDao();
+  final reparacionDao = ReparacionDao();
+
+  // Datos dinámicos
+  Map<String, int> resumen = {
+    'Clientes': 0,
+    'Equipos': 0,
+    'Ingresos': 0,
+    'Diagnósticos': 0,
+    'Presupuestos': 0,
+    'Reparaciones': 0,
+  };
+
+  List<Map<String, dynamic>> ultimosIngresos = [];
 
   @override
   void initState() {
@@ -63,6 +50,28 @@ class _HomeScreenState extends State<HomeScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
     _controller.forward();
+    cargarDatos();
+  }
+
+  Future<void> cargarDatos() async {
+    final clientes = await clienteDao.listar();
+    final equipos = await equipoDao.listarDetallado();
+    final ingresos = await ingresoDao.listarIngresosDetallados();
+    final diagnosticos = await diagnosticoDao.listarDetallado();
+    final presupuestos = await presupuestoDao.listarDetallado();
+    final reparaciones = await reparacionDao.listarDetallado();
+
+    setState(() {
+      resumen = {
+        'Clientes': clientes.length,
+        'Equipos': equipos.length,
+        'Ingresos': ingresos.length,
+        'Diagnósticos': diagnosticos.length,
+        'Presupuestos': presupuestos.length,
+        'Reparaciones': reparaciones.length,
+      };
+      ultimosIngresos = ingresos.take(5).toList();
+    });
   }
 
   @override
@@ -70,6 +79,35 @@ class _HomeScreenState extends State<HomeScreen>
     _controller.dispose();
     super.dispose();
   }
+
+  // 🧭 Mapa de rutas por módulo
+  final Map<String, String> rutas = {
+    'Clientes': '/clientes',
+    'Equipos': '/equipos',
+    'Ingresos': '/ingresos',
+    'Diagnósticos': '/diagnosticos',
+    'Presupuestos': '/presupuestos',
+    'Reparaciones': '/reparaciones',
+  };
+
+  // 🎨 Colores base por módulo
+  final Map<String, Color> colores = {
+    'Clientes': Colors.blueAccent,
+    'Equipos': Colors.purpleAccent,
+    'Ingresos': Colors.greenAccent,
+    'Diagnósticos': Colors.orangeAccent,
+    'Presupuestos': Colors.tealAccent,
+    'Reparaciones': Colors.amberAccent,
+  };
+
+  final Map<String, IconData> iconos = {
+    'Clientes': Icons.group,
+    'Equipos': Icons.devices,
+    'Ingresos': Icons.receipt_long,
+    'Diagnósticos': Icons.biotech,
+    'Presupuestos': Icons.attach_money,
+    'Reparaciones': Icons.build,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -80,9 +118,12 @@ class _HomeScreenState extends State<HomeScreen>
       child: FadeTransition(
         opacity: _fadeAnim,
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
+          child: RefreshIndicator(
+            onRefresh: cargarDatos,
+            color: Colors.tealAccent,
             child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -94,11 +135,11 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                   const SizedBox(height: 20),
 
-                  // 🧱 GRID de tarjetas resumen
+                  // 🧱 GRID resumen dinámico
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _resumenes.length,
+                    itemCount: resumen.length,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: ancho < 600
                           ? 2
@@ -110,64 +151,60 @@ class _HomeScreenState extends State<HomeScreen>
                       childAspectRatio: ancho < 400 ? 1 : 1.15,
                     ),
                     itemBuilder: (context, index) {
-                      final r = _resumenes[index];
+                      final key = resumen.keys.elementAt(index);
                       return _tarjetaResumen(
-                        titulo: r['titulo'],
-                        valor: r['valor'],
-                        icono: r['icono'],
-                        color: r['color'],
+                        context,
+                        titulo: key,
+                        valor: resumen[key] ?? 0,
+                        icono: iconos[key]!,
+                        color: colores[key]!,
+                        ruta: rutas[key]!,
                       );
                     },
                   ),
 
                   const SizedBox(height: 30),
-                  Text('Accesos rápidos', style: AppTextStyles.titulo),
+                  Text('Actividad reciente', style: AppTextStyles.titulo),
                   const SizedBox(height: 10),
 
-                  // ⚙️ Botones de acceso rápido
-                  Wrap(
-                    alignment: WrapAlignment.start,
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      _botonAcceso(
-                        context,
-                        Icons.group,
-                        'Clientes',
-                        '/clientes',
-                      ),
-                      _botonAcceso(
-                        context,
-                        Icons.devices,
-                        'Equipos',
-                        '/equipos',
-                      ),
-                      _botonAcceso(
-                        context,
-                        Icons.receipt_long,
-                        'Ingresos',
-                        '/ingresos',
-                      ),
-                      _botonAcceso(
-                        context,
-                        Icons.build,
-                        'Reparaciones',
-                        '/reparaciones',
-                      ),
-                      _botonAcceso(
-                        context,
-                        Icons.assignment,
-                        'Informes',
-                        '/informes',
-                      ),
-                      _botonAcceso(
-                        context,
-                        Icons.done_all,
-                        'Entregas',
-                        '/entregas',
-                      ),
-                    ],
-                  ),
+                  // 🧾 Últimos ingresos
+                  ultimosIngresos.isEmpty
+                      ? const Text(
+                          'No hay ingresos recientes.',
+                          style: TextStyle(color: Colors.white70),
+                        )
+                      : Column(
+                          children: ultimosIngresos.map((i) {
+                            return Card(
+                              color: AppColors.fondo.withOpacity(0.9),
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: ListTile(
+                                leading: const Icon(
+                                  Icons.laptop_mac,
+                                  color: Colors.tealAccent,
+                                ),
+                                title: Text(
+                                  '${i['tipo_equipo'] ?? ''} ${i['marca'] ?? ''}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Cliente: ${i['nombre_cliente'] ?? '-'}\n'
+                                  'Fecha: ${i['fecha_ingreso'] ?? '-'}',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                 ],
               ),
             ),
@@ -178,11 +215,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ---------- Tarjeta resumen ----------
-  Widget _tarjetaResumen({
+  Widget _tarjetaResumen(
+    BuildContext context, {
     required String titulo,
     required int valor,
     required IconData icono,
     required Color color,
+    required String ruta,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -200,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () {},
+        onTap: () => Navigator.pushNamed(context, ruta),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Column(
@@ -225,27 +264,6 @@ class _HomeScreenState extends State<HomeScreen>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  // ---------- Botones de acceso rápido ----------
-  Widget _botonAcceso(
-    BuildContext context,
-    IconData icono,
-    String texto,
-    String ruta,
-  ) {
-    return ElevatedButton.icon(
-      onPressed: () => Navigator.pushNamed(context, ruta),
-      icon: Icon(icono, size: 20),
-      label: Text(texto, style: const TextStyle(fontWeight: FontWeight.w600)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primario.withOpacity(0.95),
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        elevation: 3,
       ),
     );
   }
