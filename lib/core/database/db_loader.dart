@@ -13,11 +13,11 @@ import '../models/diagnostico.dart';
 import '../models/presupuesto.dart';
 
 /// 🚀 Cargador de datos de demostración Gontech Flow v3.
-/// 100 % alineado con las tablas y claves foráneas definidas en database_helper.dart
+/// Genera datos de ejemplo coherentes con la estructura de la BD.
 class DbLoader {
   final clienteDao = ClienteDao();
   final equipoDao = EquipoDao();
-  final ingresoDao = IngresoDao();
+  final ingresoDao = IngresoDAO();
   final diagnosticoDao = DiagnosticoDao();
   final presupuestoDao = PresupuestoDao();
   final repuestoDao = RepuestoDao();
@@ -71,28 +71,35 @@ class DbLoader {
       ),
     ];
 
-    final List<int> idEquipos = [];
+    final idEquipos = <int>[];
     for (final e in equipos) {
       final id = await equipoDao.insertar(e);
       idEquipos.add(id);
     }
     debugPrint('💻 Equipos cargados: $idEquipos');
 
-    // === 🧾 INGRESOS ===
+    // === 🧾 INGRESOS (ahora con QR) ===
+    final fecha1 = DateTime.now().toIso8601String();
+    final fecha2 = DateTime.now()
+        .subtract(const Duration(days: 2))
+        .toIso8601String();
+
     final ingresos = [
       Ingreso(
         id_equipo: idEquipos[0],
-        fecha_ingreso: DateTime.now().toIso8601String(),
+        fecha_ingreso: fecha1,
         accesorios: 'Cargador original, mochila negra',
         observaciones: 'Pantalla con líneas verticales',
         estado_ingreso: 'pendiente',
+        qr_code: 'EQUIPO-${idEquipos[0]}-$fecha1', // 👈 QR generado
       ),
       Ingreso(
         id_equipo: idEquipos[1],
-        fecha_ingreso: DateTime.now().toIso8601String(),
+        fecha_ingreso: fecha2,
         accesorios: 'Teclado y mouse inalámbrico',
         observaciones: 'Sistema lento al iniciar',
         estado_ingreso: 'pendiente',
+        qr_code: 'EQUIPO-${idEquipos[1]}-$fecha2', // 👈 QR generado
       ),
     ];
 
@@ -123,13 +130,7 @@ class DbLoader {
       ),
     ];
 
-    final List<int> idDiagnosticos = [];
-    for (final d in diagnosticos) {
-      final id = await diagnosticoDao.insertar(d);
-      idDiagnosticos.add(id);
-    }
-    debugPrint('🧪 Diagnósticos cargados OK: $idDiagnosticos');
-
+    final idDiagnosticos = <int>[];
     for (final d in diagnosticos) {
       final id = await diagnosticoDao.insertar(d);
       idDiagnosticos.add(id);
@@ -141,7 +142,7 @@ class DbLoader {
       Presupuesto(
         idDiagnostico: idDiagnosticos[0],
         descripcion: 'Cambio pantalla LED + limpieza interna',
-        total: 85000, // 👈 usa "total" (double), no "montoTotal"
+        total: 85000,
         estado: 'pendiente',
         fechaCreacion: DateTime.now().toIso8601String(),
       ),

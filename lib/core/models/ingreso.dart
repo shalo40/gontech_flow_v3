@@ -5,6 +5,7 @@ class Ingreso {
   final String accesorios;
   final String observaciones;
   final String estado_ingreso;
+  final String qr_code; // 👈 NUEVO
 
   Ingreso({
     this.id_ingreso,
@@ -13,6 +14,7 @@ class Ingreso {
     required this.accesorios,
     required this.observaciones,
     required this.estado_ingreso,
+    required this.qr_code,
   });
 
   Map<String, dynamic> toMap() => {
@@ -22,6 +24,7 @@ class Ingreso {
     'accesorios': accesorios,
     'observaciones': observaciones,
     'estado_ingreso': estado_ingreso,
+    'qr_code': qr_code,
   };
 
   factory Ingreso.fromMap(Map<String, dynamic> map) => Ingreso(
@@ -31,5 +34,6 @@ class Ingreso {
     accesorios: map['accesorios'] ?? '',
     observaciones: map['observaciones'] ?? '',
     estado_ingreso: map['estado_ingreso'] ?? 'pendiente',
+    qr_code: map['qr_code'] ?? '',
   );
 }

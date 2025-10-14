@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../database/database_helper.dart';
 import '../models/cliente.dart';
@@ -7,24 +8,26 @@ class ClienteDao {
 
   Future<void> crear_tabla(Database db) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS $_tabla (
-        id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL,
-        telefono TEXT,
-        correo TEXT,
-        direccion TEXT,
-        notas TEXT,
-        foto_path TEXT
-      );
-    ''');
+CREATE TABLE IF NOT EXISTS clientes (
+  id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL,
+  rut TEXT,
+  telefono TEXT,
+  correo TEXT,
+  direccion TEXT,
+  notas TEXT,
+  foto_path TEXT
+);
+''');
 
-    // ⚙️ Migración: si la tabla ya existía sin la columna foto_path
-    final columnas = await db.rawQuery("PRAGMA table_info($_tabla)");
+    // 🧠 Verificación y migración si la BD ya existía sin foto_path
+    final columnas = await db.rawQuery("PRAGMA table_info(clientes)");
     final tieneFoto = columnas.any((c) => c['name'] == 'foto_path');
     if (!tieneFoto) {
       await db.execute(
-        "ALTER TABLE $_tabla ADD COLUMN foto_path TEXT DEFAULT '';",
+        "ALTER TABLE clientes ADD COLUMN foto_path TEXT DEFAULT '';",
       );
+      debugPrint('✅ Columna foto_path agregada correctamente.');
     }
   }
 

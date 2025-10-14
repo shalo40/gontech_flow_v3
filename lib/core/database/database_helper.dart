@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:gontech_flow_v2/core/dao/cliente_dao.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -107,19 +108,8 @@ class DatabaseHelper {
   }
 
   Future<void> _createClientes(Database db) async {
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS clientes (
-        id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL,
-        rut TEXT,
-        telefono TEXT,
-        correo TEXT,
-        direccion TEXT,
-        notas TEXT,
-        creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
-        actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-    ''');
+    final clienteDao = ClienteDao();
+    await clienteDao.crear_tabla(db);
   }
 
   Future<void> _createFirmas(Database db) async {
@@ -135,37 +125,39 @@ class DatabaseHelper {
 
   Future<void> _createEquipos(Database db) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS equipos (
-        id_equipo INTEGER PRIMARY KEY AUTOINCREMENT,
-        id_cliente INTEGER NOT NULL,
-        tipo_equipo TEXT,
-        marca TEXT,
-        modelo TEXT,
-        numero_serie TEXT,
-        descripcion TEXT,
-        creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
-        actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente) ON DELETE CASCADE
-      );
-    ''');
+    CREATE TABLE IF NOT EXISTS equipos (
+      id_equipo INTEGER PRIMARY KEY AUTOINCREMENT,
+      id_cliente INTEGER NOT NULL,
+      tipo_equipo TEXT,
+      marca TEXT,
+      modelo TEXT,
+      numero_serie TEXT,
+      descripcion TEXT,
+      foto_path TEXT, -- ✅ NUEVO campo para guardar la ruta de la foto
+      creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+      actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente) ON DELETE CASCADE
+    );
+  ''');
   }
 
   Future<void> _createIngresos(Database db) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS ingresos (
-        id_ingreso INTEGER PRIMARY KEY AUTOINCREMENT,
-        id_equipo INTEGER NOT NULL,
-        fecha_ingreso TEXT,
-        accesorios TEXT,
-        observaciones TEXT,
-        estado_ingreso TEXT,
-        firma_cliente INTEGER,
-        creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
-        actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (id_equipo) REFERENCES equipos(id_equipo) ON DELETE CASCADE,
-        FOREIGN KEY (firma_cliente) REFERENCES firmas(id_firma) ON DELETE SET NULL
-      );
-    ''');
+    CREATE TABLE IF NOT EXISTS ingresos (
+      id_ingreso INTEGER PRIMARY KEY AUTOINCREMENT,
+      id_equipo INTEGER NOT NULL,
+      fecha_ingreso TEXT,
+      accesorios TEXT,
+      observaciones TEXT,
+      estado_ingreso TEXT,
+      qr_code TEXT, -- 👈 Nuevo campo para código QR
+      firma_cliente INTEGER,
+      creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+      actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (id_equipo) REFERENCES equipos(id_equipo) ON DELETE CASCADE,
+      FOREIGN KEY (firma_cliente) REFERENCES firmas(id_firma) ON DELETE SET NULL
+    );
+  ''');
   }
 
   Future<void> _createDiagnosticos(Database db) async {

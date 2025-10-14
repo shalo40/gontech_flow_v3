@@ -6,7 +6,7 @@ import '../../../core/models/entrega.dart';
 Future<void> mostrarEntregaModal(BuildContext context, int idReparacion) async {
   final observacionesCtrl = TextEditingController();
   final dao = EntregaDao();
-  final ingresoDao = IngresoDao();
+  final ingresoDao = IngresoDAO();
 
   await showDialog(
     context: context,

@@ -14,7 +14,7 @@ class DiagnosticosScreen extends StatefulWidget {
 
 class _DiagnosticosScreenState extends State<DiagnosticosScreen> {
   final dao = DiagnosticoDao();
-  final ingresoDao = IngresoDao();
+  final ingresoDao = IngresoDAO();
   List<Map<String, dynamic>> diagnosticos = [];
   List<Map<String, dynamic>> filtrados = [];
 

@@ -12,7 +12,7 @@ Future<void> mostrarDiagnosticoModal(
   int idIngreso,
 ) async {
   final dao = DiagnosticoDao();
-  final ingresoDao = IngresoDao();
+  final ingresoDao = IngresoDAO();
   final repuestoDao = RepuestoDao();
 
   final fallaCtrl = TextEditingController();
