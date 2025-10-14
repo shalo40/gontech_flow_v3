@@ -1,10 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:gontech_flow_v2/ui/screens/modulos/ingreso_modal.dart';
 import '../../../core/dao/cliente_dao.dart';
 import '../../../core/models/cliente.dart';
-import '../../../core/database/database_helper.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
+import 'cliente_modal.dart';
+import 'ingreso_modal.dart';
 
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
@@ -14,292 +15,283 @@ class ClientesScreen extends StatefulWidget {
 }
 
 class _ClientesScreenState extends State<ClientesScreen> {
-  final ClienteDao _dao = ClienteDao();
+  final dao = ClienteDao();
+  final buscadorCtrl = TextEditingController();
+
   List<Cliente> _clientes = [];
-  List<Cliente> _clientesFiltrados = [];
-  final TextEditingController _busquedaCtrl = TextEditingController();
+  List<Cliente> _filtrados = [];
 
   @override
   void initState() {
     super.initState();
-    _cargarClientes();
-    _busquedaCtrl.addListener(_filtrar);
+    _cargar();
   }
 
-  @override
-  void dispose() {
-    _busquedaCtrl.dispose();
-    super.dispose();
-  }
-
-  // 🧠 Cargar clientes
-  Future<void> _cargarClientes() async {
-    final data = await _dao.listar();
+  Future<void> _cargar() async {
+    final data = await dao.listar();
+    data.sort((a, b) => a.nombre.compareTo(b.nombre));
+    if (!mounted) return;
     setState(() {
       _clientes = data;
-      _clientesFiltrados = data;
+      _filtrados = data;
     });
   }
 
-  // 🔍 Filtro
-  void _filtrar() {
-    final q = _busquedaCtrl.text.toLowerCase();
+  void _filtrar(String q) {
+    final query = q.trim().toLowerCase();
     setState(() {
-      _clientesFiltrados = _clientes
-          .where(
-            (c) =>
-                c.nombre.toLowerCase().contains(q) ||
-                c.correo.toLowerCase().contains(q) ||
-                c.telefono.toLowerCase().contains(q),
-          )
-          .toList();
+      _filtrados = _clientes.where((c) {
+        return c.nombre.toLowerCase().contains(query) ||
+            c.correo.toLowerCase().contains(query) ||
+            c.telefono.toLowerCase().contains(query);
+      }).toList();
     });
   }
 
-  // 🧱 Modal agregar / editar cliente
-  Future<void> _mostrarModalCliente({Cliente? cliente}) async {
-    final nombre = TextEditingController(text: cliente?.nombre ?? '');
-    final telefono = TextEditingController(text: cliente?.telefono ?? '');
-    final correo = TextEditingController(text: cliente?.correo ?? '');
-    final direccion = TextEditingController(text: cliente?.direccion ?? '');
-    final notas = TextEditingController(text: cliente?.notas ?? '');
+  Map<String, List<Cliente>> _agruparPorLetra(List<Cliente> items) {
+    final map = <String, List<Cliente>>{};
+    for (final c in items) {
+      final letra = (c.nombre.isNotEmpty ? c.nombre[0] : '#').toUpperCase();
+      map.putIfAbsent(letra, () => []).add(c);
+    }
+    final ordenadas = Map<String, List<Cliente>>.fromEntries(
+      map.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
+    return ordenadas;
+  }
 
-    final esNuevo = cliente == null;
-
-    await showDialog(
+  Future<void> _eliminarCliente(Cliente c) async {
+    final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.fondo,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(esNuevo ? 'Nuevo cliente' : 'Editar cliente'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _campo(nombre, 'Nombre *'),
-              _campo(telefono, 'Teléfono'),
-              _campo(correo, 'Correo'),
-              _campo(direccion, 'Dirección'),
-              _campo(notas, 'Notas'),
-            ],
-          ),
+        backgroundColor: AppColors.fondo.withOpacity(0.9),
+        title: const Text(
+          'Eliminar cliente',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          '¿Eliminar a "${c.nombre}"?',
+          style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              if (nombre.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Debe ingresar un nombre')),
-                );
-                return;
-              }
-
-              // Evitar duplicados por correo o nombre
-              final duplicado = _clientes.any(
-                (c) =>
-                    c.nombre.toLowerCase() == nombre.text.toLowerCase() &&
-                    c.id_cliente != cliente?.id_cliente,
-              );
-              if (duplicado) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Ya existe un cliente con ese nombre.'),
-                  ),
-                );
-                return;
-              }
-
-              final nuevo = Cliente(
-                id_cliente: cliente?.id_cliente,
-                nombre: nombre.text,
-                telefono: telefono.text,
-                correo: correo.text,
-                direccion: direccion.text,
-                notas: notas.text,
-              );
-
-              if (esNuevo) {
-                await _dao.insertar(nuevo);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Cliente agregado correctamente'),
-                  ),
-                );
-              } else {
-                await _dao.actualizar(nuevo);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cliente actualizado')),
-                );
-              }
-
-              if (context.mounted) Navigator.pop(context);
-              _cargarClientes();
-            },
-            child: Text(esNuevo ? 'Guardar' : 'Actualizar'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar'),
           ),
         ],
       ),
     );
-  }
 
-  Widget _campo(TextEditingController ctrl, String label) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: TextField(
-        controller: ctrl,
-        decoration: InputDecoration(
-          labelText: label,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-    );
-  }
-
-  // 🗑 Validar si cliente tiene ingresos antes de eliminar
-  Future<bool> _puedeEliminar(int idCliente) async {
-    final db = await DatabaseHelper().db;
-    final ingresos = await db.query(
-      'ingresos',
-      where:
-          'id_equipo IN (SELECT id_equipo FROM equipos WHERE id_cliente = ?)',
-      whereArgs: [idCliente],
-      limit: 1,
-    );
-    return ingresos.isEmpty;
-  }
-
-  Future<void> _eliminarCliente(Cliente c) async {
-    final permitido = await _puedeEliminar(c.id_cliente!);
-    if (!permitido) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No se puede eliminar el cliente: tiene ingresos asociados.',
-          ),
-        ),
-      );
-      return;
+    if (ok == true) {
+      await dao.eliminar(c.id_cliente!);
+      await _cargar();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cliente eliminado correctamente')),
+        );
+      }
     }
-
-    await _dao.eliminar(c.id_cliente!);
-    _cargarClientes();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Cliente eliminado.')));
   }
 
   @override
   Widget build(BuildContext context) {
+    final grupos = _agruparPorLetra(_filtrados);
+
     return LayoutPrincipal(
       titulo: 'Clientes',
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.person_add_alt_1),
+        label: const Text('Nuevo cliente'),
+        backgroundColor: Colors.tealAccent,
+        foregroundColor: AppColors.fondo,
+        onPressed: () async {
+          await mostrarClienteModal(context, onGuardado: _cargar);
+        },
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _busquedaCtrl,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: 'Buscar cliente...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
+            // 🔍 Buscador
+            TextField(
+              controller: buscadorCtrl,
+              onChanged: _filtrar,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Buscar por nombre, correo o teléfono...',
+                hintStyle: const TextStyle(color: Colors.white54),
+                prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                filled: true,
+                fillColor: AppColors.fondo.withOpacity(0.6),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
                 ),
-                const SizedBox(width: 10),
-                FloatingActionButton.small(
-                  heroTag: 'add_cliente',
-                  backgroundColor: AppColors.primario,
-                  onPressed: () => _mostrarModalCliente(),
-                  child: const Icon(Icons.add),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
-            // 📋 Lista de clientes
+            // 📋 Lista agrupada
             Expanded(
-              child: _clientesFiltrados.isEmpty
+              child: _filtrados.isEmpty
                   ? const Center(
                       child: Text(
                         'No hay clientes registrados.',
                         style: TextStyle(color: Colors.white70),
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: _clientesFiltrados.length,
-                      itemBuilder: (context, i) {
-                        final c = _clientesFiltrados[i];
-                        return Card(
-                          color: AppColors.fondo.withOpacity(0.85),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Colors.blueAccent,
-                              child: Icon(Icons.person, color: Colors.white),
-                            ),
-                            title: Text(
-                              c.nombre,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            subtitle: Text(
-                              c.correo.isNotEmpty
-                                  ? c.correo
-                                  : c.telefono.isNotEmpty
-                                  ? c.telefono
-                                  : 'Sin contacto',
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                            trailing: Wrap(
-                              spacing: 4,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Crear ingreso',
-                                  icon: const Icon(
-                                    Icons.add_box_outlined,
-                                    color: Colors.tealAccent,
-                                  ),
-                                  onPressed: () {
-                                    mostrarIngresoModal(context, c.id_cliente!);
-                                  },
+                  : ListView(
+                      children: grupos.entries.map((entry) {
+                        final letra = entry.key;
+                        final items = entry.value;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
+                              child: Text(
+                                letra,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  letterSpacing: 1.2,
                                 ),
-                                IconButton(
-                                  tooltip: 'Editar cliente',
-                                  icon: const Icon(
-                                    Icons.edit_outlined,
-                                    color: Colors.amberAccent,
-                                  ),
-                                  onPressed: () =>
-                                      _mostrarModalCliente(cliente: c),
-                                ),
-                                IconButton(
-                                  tooltip: 'Eliminar cliente',
-                                  icon: const Icon(
-                                    Icons.delete_outline,
-                                    color: Colors.redAccent,
-                                  ),
-                                  onPressed: () => _eliminarCliente(c),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
+                            ...items.map((c) => _tarjetaCliente(c)),
+                          ],
                         );
-                      },
+                      }).toList(),
                     ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// 💎 Tarjeta visual de cliente con foto, nombre y opciones desplegables
+  Widget _tarjetaCliente(Cliente c) {
+    return Card(
+      color: Colors.grey.shade900.withOpacity(0.9),
+      elevation: 3,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: ExpansionTile(
+        leading: GestureDetector(
+          onTap: () {
+            if (c.foto_path.isNotEmpty) {
+              _mostrarFotoAmpliada(c);
+            }
+          },
+          child: Hero(
+            tag: 'cliente_${c.id_cliente ?? c.nombre}',
+            child: CircleAvatar(
+              radius: 22,
+              backgroundColor: Colors.tealAccent.withOpacity(0.15),
+              backgroundImage: (c.foto_path.isNotEmpty)
+                  ? FileImage(File(c.foto_path))
+                  : null,
+              child: (c.foto_path.isEmpty)
+                  ? const Icon(Icons.person, color: Colors.tealAccent)
+                  : null,
+            ),
+          ),
+        ),
+        iconColor: Colors.tealAccent,
+        collapsedIconColor: Colors.white60,
+        title: Text(
+          c.nombre,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Text(
+          [c.telefono, c.correo].where((s) => s.trim().isNotEmpty).join(' • '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white60, fontSize: 13),
+        ),
+        childrenPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 8,
+        ),
+        children: [
+          _itemOpcion(
+            icon: Icons.playlist_add,
+            texto: 'Registrar ingreso',
+            onTap: () async {
+              await mostrarIngresoModal(context, c.id_cliente!);
+              await _cargar();
+            },
+          ),
+          const Divider(color: Colors.white24, height: 0),
+          _itemOpcion(
+            icon: Icons.edit,
+            texto: 'Editar cliente',
+            onTap: () async {
+              await mostrarClienteModal(
+                context,
+                clienteExistente: c,
+                onGuardado: _cargar,
+              );
+            },
+          ),
+          const Divider(color: Colors.white24, height: 0),
+          _itemOpcion(
+            icon: Icons.delete_forever,
+            texto: 'Eliminar',
+            color: Colors.redAccent,
+            onTap: () => _eliminarCliente(c),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 🔍 Visualización completa de foto
+  void _mostrarFotoAmpliada(Cliente c) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Hero(
+            tag: 'cliente_${c.id_cliente ?? c.nombre}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.file(File(c.foto_path), fit: BoxFit.cover),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 📦 Item de menú dentro del desplegable
+  Widget _itemOpcion({
+    required IconData icon,
+    required String texto,
+    Color color = Colors.tealAccent,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, color: color),
+      title: Text(texto, style: const TextStyle(color: Colors.white)),
+      onTap: onTap,
     );
   }
 }

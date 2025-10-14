@@ -43,7 +43,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int i) async {
                   // Selección del equipo
                   DropdownButtonFormField<Equipo>(
                     dropdownColor: AppColors.fondo,
-                    value: equipoSeleccionado,
+                    initialValue: equipoSeleccionado,
                     items: equipos.map((e) {
                       return DropdownMenuItem<Equipo>(
                         value: e,

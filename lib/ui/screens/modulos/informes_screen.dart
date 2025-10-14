@@ -30,6 +30,16 @@ class _InformesScreenState extends State<InformesScreen> {
   Widget build(BuildContext context) {
     return LayoutPrincipal(
       titulo: 'Informes técnicos',
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.tealAccent,
+        foregroundColor: AppColors.fondo,
+        onPressed: () async {
+          // temporal: crear informe para el primer diagnóstico
+          await mostrarInformeModal(context, 1);
+          await cargar();
+        },
+        child: const Icon(Icons.add),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: informes.isEmpty
@@ -86,16 +96,6 @@ class _InformesScreenState extends State<InformesScreen> {
                   },
                 ),
               ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.tealAccent,
-        foregroundColor: AppColors.fondo,
-        onPressed: () async {
-          // temporal: crear informe para el primer diagnóstico
-          await mostrarInformeModal(context, 1);
-          await cargar();
-        },
-        child: const Icon(Icons.add),
       ),
     );
   }

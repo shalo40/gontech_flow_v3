@@ -59,7 +59,7 @@ Future<void> mostrarInformeModal(
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    value: tecnicoSeleccionado,
+                    initialValue: tecnicoSeleccionado,
                     dropdownColor: AppColors.fondo,
                     decoration: InputDecoration(
                       prefixIcon: const Icon(

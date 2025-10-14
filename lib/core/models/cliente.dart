@@ -5,6 +5,7 @@ class Cliente {
   final String correo;
   final String direccion;
   final String notas;
+  final String foto_path; // 🆕 nuevo campo
 
   Cliente({
     this.id_cliente,
@@ -13,6 +14,7 @@ class Cliente {
     required this.correo,
     required this.direccion,
     required this.notas,
+    this.foto_path = '', // valor por defecto
   });
 
   Map<String, dynamic> to_map() => {
@@ -22,6 +24,7 @@ class Cliente {
     'correo': correo,
     'direccion': direccion,
     'notas': notas,
+    'foto_path': foto_path, // 🆕
   };
 
   factory Cliente.from_map(Map<String, dynamic> map) => Cliente(
@@ -31,5 +34,6 @@ class Cliente {
     correo: map['correo'] ?? '',
     direccion: map['direccion'] ?? '',
     notas: map['notas'] ?? '',
+    foto_path: map['foto_path'] ?? '', // 🆕
   );
 }

@@ -13,9 +13,19 @@ class ClienteDao {
         telefono TEXT,
         correo TEXT,
         direccion TEXT,
-        notas TEXT
+        notas TEXT,
+        foto_path TEXT
       );
     ''');
+
+    // ⚙️ Migración: si la tabla ya existía sin la columna foto_path
+    final columnas = await db.rawQuery("PRAGMA table_info($_tabla)");
+    final tieneFoto = columnas.any((c) => c['name'] == 'foto_path');
+    if (!tieneFoto) {
+      await db.execute(
+        "ALTER TABLE $_tabla ADD COLUMN foto_path TEXT DEFAULT '';",
+      );
+    }
   }
 
   Future<int> insertar(Cliente cliente) async {
@@ -25,7 +35,7 @@ class ClienteDao {
 
   Future<List<Cliente>> listar() async {
     final db = await DatabaseHelper().db;
-    final res = await db.query(_tabla, orderBy: 'id_cliente DESC');
+    final res = await db.query(_tabla, orderBy: 'nombre ASC');
     return res.map((e) => Cliente.from_map(e)).toList();
   }
 

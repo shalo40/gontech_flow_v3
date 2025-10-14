@@ -50,7 +50,7 @@ Future<void> mostrarReparacionModal(
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    value: tecnicoSeleccionado,
+                    initialValue: tecnicoSeleccionado,
                     dropdownColor: AppColors.fondo,
                     decoration: InputDecoration(
                       prefixIcon: const Icon(
@@ -78,7 +78,7 @@ Future<void> mostrarReparacionModal(
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: estado,
+                    initialValue: estado,
                     dropdownColor: AppColors.fondo,
                     decoration: InputDecoration(
                       prefixIcon: const Icon(
