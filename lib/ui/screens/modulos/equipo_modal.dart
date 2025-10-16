@@ -35,7 +35,7 @@ Future<void> mostrarEquipoModal(
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
-          Future<void> _seleccionarFoto() async {
+          Future<void> seleccionarFoto() async {
             final fuente = await showDialog<ImageSource>(
               context: context,
               builder: (_) => AlertDialog(
@@ -62,8 +62,9 @@ Future<void> mostrarEquipoModal(
               source: fuente,
               imageQuality: 75,
             );
-            if (imagen != null)
+            if (imagen != null) {
               setState(() => fotoSeleccionada = File(imagen.path));
+            }
           }
 
           return AlertDialog(
@@ -95,7 +96,7 @@ Future<void> mostrarEquipoModal(
                   children: [
                     // 🖼️ Imagen del equipo
                     GestureDetector(
-                      onTap: _seleccionarFoto,
+                      onTap: seleccionarFoto,
                       child: CircleAvatar(
                         radius: 55,
                         backgroundColor: Colors.tealAccent.withOpacity(0.2),

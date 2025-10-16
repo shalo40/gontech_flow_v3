@@ -16,24 +16,25 @@ Future<void> mostrarDiagnosticoModal(
   final repuestoDao = RepuestoDao();
 
   final fallaCtrl = TextEditingController();
+  final causasCtrl = TextEditingController();
   final conclusionesCtrl = TextEditingController();
   String? tecnicoSeleccionado;
   List<String> pruebasSeleccionadas = [];
 
-  // 🔬 Opciones de pruebas comunes
+  // 🔬 Opciones de pruebas
   final List<String> pruebasDisponibles = [
     'Prueba de encendido',
-    'Prueba de voltaje',
-    'Prueba de temperatura',
+    'Prueba de voltaje y energía',
+    'Prueba de temperatura / ventilación',
     'Prueba de disco / SSD',
-    'Prueba de RAM',
+    'Prueba de memoria RAM',
     'Prueba de red / WiFi',
-    'Limpieza interna y visual',
+    'Limpieza interna y revisión visual',
     'Revisión BIOS / UEFI',
-    'Chequeo periféricos',
+    'Chequeo periféricos y conectores',
   ];
 
-  // 👨‍🔧 Técnicos disponibles (luego vendrá desde usuarios)
+  // 👨‍🔧 Técnicos (más adelante viene de usuarios)
   final List<String> tecnicos = [
     'Gonzalo Castillo',
     'Michelle Rivera',
@@ -41,10 +42,11 @@ Future<void> mostrarDiagnosticoModal(
     'Asistente Taller',
   ];
 
+  int pasoActual = 0;
   List<Repuesto> repuestos = [];
 
-  Future<void> cargarRepuestos(int idDiagnosticoTemp) async {
-    final data = await repuestoDao.listarPorDiagnostico(idDiagnosticoTemp);
+  Future<void> cargarRepuestos() async {
+    final data = await repuestoDao.listarPorDiagnostico(idIngreso);
     repuestos = data;
   }
 
@@ -55,245 +57,276 @@ Future<void> mostrarDiagnosticoModal(
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            backgroundColor: AppColors.fondo.withOpacity(0.95),
+            backgroundColor: AppColors.fondo.withOpacity(0.97),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
             ),
-            title: const Text(
-              'Registrar diagnóstico',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+            title: Row(
+              children: const [
+                Icon(Icons.biotech, color: Colors.tealAccent),
+                SizedBox(width: 8),
+                Text(
+                  'Asistente de diagnóstico',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _campo(
-                    fallaCtrl,
-                    'Descripción de la falla',
-                    Icons.warning_amber_rounded,
+            content: SizedBox(
+              width: 420,
+              child: Theme(
+                data: ThemeData.dark().copyWith(
+                  colorScheme: ColorScheme.dark(
+                    primary: Colors.tealAccent.shade400,
                   ),
-
-                  // 🔬 Chips de pruebas seleccionables
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Pruebas realizadas:',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: -8,
-                    children: pruebasDisponibles.map((prueba) {
-                      final activo = pruebasSeleccionadas.contains(prueba);
-                      return FilterChip(
-                        label: Text(
-                          prueba,
-                          style: TextStyle(
-                            color: activo ? Colors.black : Colors.white70,
-                            fontSize: 13,
+                ),
+                child: Stepper(
+                  type: StepperType.vertical,
+                  currentStep: pasoActual,
+                  onStepTapped: (n) => setState(() => pasoActual = n),
+                  onStepContinue: () {
+                    if (pasoActual < 2) {
+                      setState(() => pasoActual++);
+                    }
+                  },
+                  onStepCancel: () {
+                    if (pasoActual > 0) {
+                      setState(() => pasoActual--);
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
+                  controlsBuilder: (context, details) {
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (pasoActual > 0)
+                          TextButton(
+                            onPressed: details.onStepCancel,
+                            child: const Text('Volver'),
+                          ),
+                        ElevatedButton.icon(
+                          onPressed: details.onStepContinue,
+                          icon: const Icon(Icons.navigate_next),
+                          label: Text(
+                            pasoActual < 2 ? 'Siguiente' : 'Finalizar',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.tealAccent.withOpacity(0.2),
+                            foregroundColor: Colors.tealAccent,
                           ),
                         ),
-                        selected: activo,
-                        backgroundColor: AppColors.fondo.withOpacity(0.6),
-                        selectedColor: Colors.tealAccent,
-                        onSelected: (val) {
-                          setState(() {
-                            if (val) {
-                              pruebasSeleccionadas.add(prueba);
-                            } else {
-                              pruebasSeleccionadas.remove(prueba);
-                            }
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-
-                  const SizedBox(height: 12),
-                  _campo(
-                    conclusionesCtrl,
-                    'Conclusiones / resultado',
-                    Icons.fact_check_outlined,
-                  ),
-
-                  // 👨‍🔧 Selector de técnico
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: tecnicoSeleccionado,
-                    dropdownColor: AppColors.fondo,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Técnico responsable',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      prefixIcon: const Icon(
-                        Icons.engineering,
-                        color: Colors.tealAccent,
+                      ],
+                    );
+                  },
+                  steps: [
+                    // Paso 1 — Descripción de falla
+                    Step(
+                      title: const Text('Identificación de la falla'),
+                      content: Column(
+                        children: [
+                          _campo(
+                            fallaCtrl,
+                            'Descripción del problema',
+                            Icons.warning,
+                          ),
+                          const SizedBox(height: 10),
+                          _campo(
+                            causasCtrl,
+                            'Posibles causas',
+                            Icons.lightbulb_outline,
+                          ),
+                        ],
                       ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.tealAccent),
-                      ),
+                      isActive: pasoActual >= 0,
+                      state: pasoActual > 0
+                          ? StepState.complete
+                          : StepState.editing,
                     ),
-                    items: tecnicos.map((t) {
-                      return DropdownMenuItem(value: t, child: Text(t));
-                    }).toList(),
-                    onChanged: (val) {
-                      setState(() => tecnicoSeleccionado = val);
-                    },
-                  ),
 
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white30),
-                  const SizedBox(height: 8),
-
-                  // 🧩 Repuestos sugeridos
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Repuestos sugeridos',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.add_circle_outline,
-                          color: Colors.tealAccent,
-                        ),
-                        onPressed: () async {
-                          await mostrarRepuestoModal(
-                            context: context,
-                            idReferencia: idIngreso,
-                            origen: 'diagnostico',
-                          );
-                          await cargarRepuestos(idIngreso);
-                          setState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-
-                  // 📋 Lista de repuestos
-                  FutureBuilder<List<Repuesto>>(
-                    future: repuestoDao.listarPorDiagnostico(idIngreso),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Text(
-                          'Sin repuestos sugeridos',
-                          style: TextStyle(color: Colors.white54),
-                        );
-                      }
-
-                      final repuestos = snapshot.data!;
-                      return Column(
-                        children: repuestos.map((r) {
-                          return Card(
-                            color: AppColors.fondo.withOpacity(0.7),
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              dense: true,
-                              title: Text(
-                                r.nombre,
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                              subtitle: Text(
-                                'Cantidad: ${r.cantidad} | Estado: ${r.estado}',
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                              trailing: PopupMenuButton<String>(
-                                color: AppColors.fondo,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                    // Paso 2 — Pruebas
+                    Step(
+                      title: const Text('Pruebas realizadas'),
+                      content: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: -8,
+                            children: pruebasDisponibles.map((prueba) {
+                              final activo = pruebasSeleccionadas.contains(
+                                prueba,
+                              );
+                              return FilterChip(
+                                label: Text(
+                                  prueba,
+                                  style: TextStyle(
+                                    color: activo
+                                        ? Colors.black
+                                        : Colors.white70,
+                                    fontSize: 13,
+                                  ),
                                 ),
-                                onSelected: (opcion) async {
-                                  if (opcion == 'instalado') {
-                                    await repuestoDao.actualizarEstado(
-                                      r.id_repuesto!,
-                                      'instalado',
-                                    );
-                                  } else if (opcion == 'eliminar') {
-                                    await repuestoDao.eliminar(r.id_repuesto!);
-                                  }
-                                  await cargarRepuestos(idIngreso);
+                                selected: activo,
+                                backgroundColor: AppColors.fondo.withOpacity(
+                                  0.6,
+                                ),
+                                selectedColor: Colors.tealAccent,
+                                onSelected: (val) {
+                                  setState(() {
+                                    if (val) {
+                                      pruebasSeleccionadas.add(prueba);
+                                    } else {
+                                      pruebasSeleccionadas.remove(prueba);
+                                    }
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Repuestos sugeridos',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.add_circle_outline,
+                                  color: Colors.tealAccent,
+                                ),
+                                onPressed: () async {
+                                  await mostrarRepuestoModal(
+                                    context: context,
+                                    idReferencia: idIngreso,
+                                    origen: 'diagnostico',
+                                  );
+                                  await cargarRepuestos();
                                   setState(() {});
                                 },
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'instalado',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.build,
-                                          color: Colors.tealAccent,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text('Marcar instalado'),
-                                      ],
+                              ),
+                            ],
+                          ),
+                          FutureBuilder<List<Repuesto>>(
+                            future: repuestoDao.listarPorDiagnostico(idIngreso),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                                return const Text(
+                                  'Sin repuestos sugeridos',
+                                  style: TextStyle(color: Colors.white54),
+                                );
+                              }
+
+                              final repuestos = snapshot.data!;
+                              return Column(
+                                children: repuestos.map((r) {
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(
+                                      Icons.memory,
+                                      color: Colors.tealAccent,
                                     ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'eliminar',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.delete_forever,
-                                          color: Colors.redAccent,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text('Eliminar'),
-                                      ],
+                                    title: Text(
+                                      r.nombre,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    subtitle: Text(
+                                      'Cantidad: ${r.cantidad} | Estado: ${r.estado}',
+                                      style: const TextStyle(
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      isActive: pasoActual >= 1,
+                      state: pasoActual > 1
+                          ? StepState.complete
+                          : StepState.editing,
+                    ),
+
+                    // Paso 3 — Conclusiones
+                    Step(
+                      title: const Text('Conclusiones y técnico responsable'),
+                      content: Column(
+                        children: [
+                          _campo(
+                            conclusionesCtrl,
+                            'Conclusión técnica / resultado',
+                            Icons.fact_check_outlined,
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: tecnicoSeleccionado,
+                            dropdownColor: AppColors.fondo,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Técnico responsable',
+                              labelStyle: const TextStyle(
+                                color: Colors.white70,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.engineering,
+                                color: Colors.tealAccent,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              focusedBorder: const OutlineInputBorder(
+                                borderSide: BorderSide(
+                                  color: Colors.tealAccent,
+                                ),
                               ),
                             ),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                ],
+                            items: tecnicos.map((t) {
+                              return DropdownMenuItem(value: t, child: Text(t));
+                            }).toList(),
+                            onChanged: (val) {
+                              setState(() => tecnicoSeleccionado = val);
+                            },
+                          ),
+                        ],
+                      ),
+                      isActive: pasoActual >= 2,
+                    ),
+                  ],
+                ),
               ),
             ),
-            actionsAlignment: MainAxisAlignment.spaceBetween,
             actions: [
               TextButton.icon(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                icon: const Icon(Icons.close, color: Colors.redAccent),
                 label: const Text('Cancelar'),
               ),
               ElevatedButton.icon(
+                icon: const Icon(Icons.save),
+                label: const Text('Guardar diagnóstico'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.tealAccent.withOpacity(0.2),
                   foregroundColor: Colors.tealAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                 ),
-                icon: const Icon(Icons.save),
-                label: const Text('Guardar diagnóstico'),
                 onPressed: () async {
-                  if (fallaCtrl.text.isEmpty || tecnicoSeleccionado == null) {
+                  if (fallaCtrl.text.isEmpty ||
+                      tecnicoSeleccionado == null ||
+                      pruebasSeleccionadas.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
-                          'Por favor completa los campos requeridos',
+                          'Completa los campos requeridos antes de guardar',
                         ),
                         behavior: SnackBarBehavior.floating,
                       ),
@@ -306,8 +339,8 @@ Future<void> mostrarDiagnosticoModal(
                     descripcion_falla: fallaCtrl.text,
                     pruebas_realizadas: pruebasSeleccionadas.join(', '),
                     conclusiones: conclusionesCtrl.text,
-                    id_tecnico: 1, // luego: usuario logueado
-                    estado: 'en_revision',
+                    id_tecnico: 1,
+                    estado: 'diagnosticado',
                   );
 
                   try {
@@ -322,7 +355,7 @@ Future<void> mostrarDiagnosticoModal(
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            '✅ Diagnóstico registrado correctamente',
+                            '✅ Diagnóstico registrado exitosamente',
                           ),
                           behavior: SnackBarBehavior.floating,
                         ),
@@ -332,7 +365,7 @@ Future<void> mostrarDiagnosticoModal(
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('❌ Error al guardar: $e'),
+                          content: Text('Error al guardar diagnóstico: $e'),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );

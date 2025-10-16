@@ -1,6 +1,11 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+
 import '../../../core/dao/equipo_dao.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
@@ -57,9 +62,23 @@ class _EquiposScreenState extends State<EquiposScreen> {
     }
   }
 
+  String _descripcionEstado(String estado) {
+    switch (estado) {
+      case 'pendiente':
+        return 'Pendiente de diagnóstico';
+      case 'diagnosticado':
+        return 'Pendiente de aprobación de presupuesto';
+      case 'en_reparacion':
+        return 'En proceso de reparación';
+      case 'entregado':
+        return 'Equipo entregado al cliente';
+      default:
+        return 'Estado desconocido';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 🧮 Filtrado combinado
     final equiposFiltrados = equipos.where((e) {
       final texto = filtroTexto.toLowerCase();
       final coincideTexto =
@@ -72,7 +91,6 @@ class _EquiposScreenState extends State<EquiposScreen> {
       return coincideTexto && coincideEstado;
     }).toList();
 
-    // Agrupación por fecha (día-mes)
     final agrupados = <String, List<Map<String, dynamic>>>{};
     for (final e in equiposFiltrados) {
       final fecha = (e['fecha_ingreso'] ?? 'Sin fecha').split('T').first;
@@ -83,7 +101,6 @@ class _EquiposScreenState extends State<EquiposScreen> {
       titulo: 'Equipos',
       child: Column(
         children: [
-          // 🔍 Búsqueda
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
@@ -103,7 +120,7 @@ class _EquiposScreenState extends State<EquiposScreen> {
             ),
           ),
 
-          // 🏷️ Chips de estado
+          // 🏷️ Filtros por estado
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -119,7 +136,7 @@ class _EquiposScreenState extends State<EquiposScreen> {
           ),
           const SizedBox(height: 8),
 
-          // 📋 Listado agrupado
+          // 📋 Lista agrupada
           Expanded(
             child: RefreshIndicator(
               onRefresh: cargar,
@@ -230,28 +247,28 @@ class _EquiposScreenState extends State<EquiposScreen> {
     );
   }
 
+  // ===========================
+  // 💬 DETALLES DEL EQUIPO
+  // ===========================
   Future<void> _mostrarDetalles(
     BuildContext context,
     Map<String, dynamic> equipo,
   ) async {
     final estado = equipo['estado'] ?? 'pendiente';
+
     await showDialog(
       context: context,
       builder: (_) => Dialog(
-        backgroundColor: AppColors.fondo.withOpacity(0.95),
+        backgroundColor: AppColors.fondo.withOpacity(0.97),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 400, // ✅ límite horizontal del diálogo
-            maxHeight: 600, // ✅ evita scroll infinito
-          ),
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 640),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 🔷 Imagen o ícono del equipo
                   CircleAvatar(
                     radius: 45,
                     backgroundColor: Colors.tealAccent.withOpacity(0.15),
@@ -272,74 +289,116 @@ class _EquiposScreenState extends State<EquiposScreen> {
                         : null,
                   ),
                   const SizedBox(height: 12),
-
-                  // 👤 Nombre del cliente
                   Text(
                     equipo['nombre_cliente'] ?? 'Sin cliente',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
-
-                  // 💻 Info básica del equipo
+                  const SizedBox(height: 6),
                   Text(
                     '${equipo['tipo_equipo']} ${equipo['marca']} - ${equipo['modelo']}',
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 8),
-
-                  // 🏷 Estado
+                  const SizedBox(height: 10),
                   Chip(
                     label: Text(
                       estado.toUpperCase(),
-                      style: const TextStyle(color: Colors.black, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     backgroundColor: _colorEstado(estado),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _descripcionEstado(estado),
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
                   const SizedBox(height: 16),
 
-                  // 🧾 QR del equipo
+                  // QR
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: QrImageView(
                       data:
                           'EQUIPO-${equipo['id_equipo']}-${equipo['numero_serie'] ?? ''}',
-                      size: 160, // ✅ tamaño fijo, evita cálculo intrínseco
+                      size: 160,
                       backgroundColor: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  // 📖 Texto explicativo
+                  const SizedBox(height: 8),
                   const Text(
                     'Código QR único del equipo',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-                  // 🔘 Botón cerrar
-                  Align(
-                    alignment: Alignment.center,
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close, color: Colors.black),
-                      label: const Text('Cerrar'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.tealAccent,
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                  // Detalles técnicos
+                  _detalleItem('ID Equipo', equipo['id_equipo'].toString()),
+                  _detalleItem('Número de serie', equipo['numero_serie']),
+                  _detalleItem('Tipo', equipo['tipo_equipo']),
+                  _detalleItem('Marca', equipo['marca']),
+                  _detalleItem('Modelo', equipo['modelo']),
+                  _detalleItem('Descripción', equipo['descripcion']),
+                  const SizedBox(height: 16),
+
+                  // Botones
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          await _imprimirQR(
+                            context,
+                            equipo['id_equipo'].toString(),
+                            equipo['numero_serie'] ?? '',
+                            equipo['nombre_cliente'] ?? '',
+                          );
+                        },
+                        icon: const Icon(Icons.print, color: Colors.black),
+                        label: const Text('Imprimir QR'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.tealAccent,
+                          foregroundColor: Colors.black,
                         ),
                       ),
-                    ),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(
+                            context,
+                            '/ingresos',
+                            arguments: equipo['id_equipo'],
+                          );
+                        },
+                        icon: const Icon(Icons.receipt_long),
+                        label: const Text('Ver ingreso'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.black),
+                        label: const Text('Cerrar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white24,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -348,5 +407,145 @@ class _EquiposScreenState extends State<EquiposScreen> {
         ),
       ),
     );
+  }
+
+  Widget _detalleItem(String titulo, String? valor) {
+    if (valor == null || valor.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Text(
+            '$titulo: ',
+            style: const TextStyle(color: Colors.white60, fontSize: 12),
+          ),
+          Expanded(
+            child: Text(
+              valor,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================
+  // 🖨️ FUNCIÓN DE IMPRESIÓN QR
+  // ===========================
+  Future<void> _imprimirQR(
+    BuildContext context,
+    String idEquipo,
+    String numeroSerie,
+    String cliente,
+  ) async {
+    try {
+      final pdf = pw.Document();
+
+      // Logo Gontech Solutions
+      final logo = await rootBundle.load('lib/ui/assets/images/logo.png');
+      final logoBytes = logo.buffer.asUint8List();
+
+      // Generar el QR
+      final qrImage = await QrPainter(
+        data: 'EQUIPO-$idEquipo-$numeroSerie',
+        version: QrVersions.auto,
+        color: const Color(0xFF000000),
+        emptyColor: const Color(0xFFFFFFFF),
+      ).toImageData(400, format: ImageByteFormat.png);
+
+      final imageBytes = qrImage!.buffer.asUint8List();
+
+      // Etiqueta profesional (80x50 mm)
+      pdf.addPage(
+        pw.Page(
+          pageFormat: const PdfPageFormat(
+            80 * PdfPageFormat.mm,
+            50 * PdfPageFormat.mm,
+          ),
+          margin: const pw.EdgeInsets.all(6),
+          build: (pw.Context context) {
+            return pw.Container(
+              color: PdfColors.white,
+              child: pw.Column(
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  // Logo + Marca
+                  pw.Image(pw.MemoryImage(logoBytes), height: 28),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    'GONTECH SOLUTIONS',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  pw.Text(
+                    cliente,
+                    style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                  ),
+                  pw.SizedBox(height: 4),
+
+                  pw.Divider(color: PdfColors.grey400, thickness: 0.3),
+
+                  // Info del equipo
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    'All-in-One HP Pavilion 24',
+                    style: pw.TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.Text(
+                    'Serie: $numeroSerie   ID: #$idEquipo',
+                    style: pw.TextStyle(fontSize: 7.5),
+                  ),
+                  pw.SizedBox(height: 4),
+
+                  pw.Divider(color: PdfColors.grey400, thickness: 0.3),
+
+                  // Código QR centrado
+                  pw.SizedBox(height: 4),
+                  pw.Image(pw.MemoryImage(imageBytes), width: 90, height: 90),
+                  pw.SizedBox(height: 4),
+
+                  // Footer
+                  pw.Divider(color: PdfColors.grey400, thickness: 0.3),
+                  pw.Text(
+                    'gontechsolutions.cl',
+                    style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+
+      // Guardar en Descargas
+      final Directory downloadsDir = Directory('/storage/emulated/0/Download');
+      final file = File('${downloadsDir.path}/Etiqueta_Equipo_$idEquipo.pdf');
+      await file.writeAsBytes(await pdf.save());
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ PDF guardado en Descargas: ${file.path}'),
+          backgroundColor: Colors.tealAccent,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al generar el QR: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 }

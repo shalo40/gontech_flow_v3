@@ -25,7 +25,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
-          Future<void> _seleccionarFoto() async {
+          Future<void> seleccionarFoto() async {
             final fuente = await showDialog<ImageSource>(
               context: context,
               builder: (_) => AlertDialog(
@@ -55,7 +55,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
             if (imagen != null) setState(() => fotoEquipo = File(imagen.path));
           }
 
-          Future<void> _crearEquipo() async {
+          Future<void> crearEquipo() async {
             await mostrarEquipoModal(
               context,
               idCliente: idCliente,
@@ -92,7 +92,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                   children: [
                     // 🖼️ Foto del equipo
                     GestureDetector(
-                      onTap: _seleccionarFoto,
+                      onTap: seleccionarFoto,
                       child: CircleAvatar(
                         radius: 55,
                         backgroundColor: Colors.tealAccent.withOpacity(0.2),
@@ -112,7 +112,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
 
                     // 🔽 Selección de equipo
                     DropdownButtonFormField<Equipo>(
-                      value: equipoSeleccionado,
+                      initialValue: equipoSeleccionado,
                       decoration: InputDecoration(
                         labelText: 'Seleccionar equipo del cliente',
                         labelStyle: const TextStyle(color: Colors.white70),
@@ -165,7 +165,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton.icon(
-                        onPressed: _crearEquipo,
+                        onPressed: crearEquipo,
                         icon: const Icon(
                           Icons.add_circle_outline,
                           color: Colors.tealAccent,
