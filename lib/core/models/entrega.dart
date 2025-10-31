@@ -1,39 +1,49 @@
 class Entrega {
-  int? idEntrega;
-  int idReparacion;
-  String fechaEntrega;
-  String observaciones;
-  String firmaCliente; // base64 (para la firma digital, futura)
-  String estado; // entregado | pendiente_pdf
+  int? id_entrega;
+  int id_reparacion;
+  String? nombre_receptor;
+  String? rut_receptor;
+  String? observaciones;
+  String? firma_path;
+  String? fecha_entrega;
+  String? estado;
 
   Entrega({
-    this.idEntrega,
-    required this.idReparacion,
-    required this.fechaEntrega,
-    required this.observaciones,
-    required this.firmaCliente,
-    required this.estado,
+    this.id_entrega,
+    required this.id_reparacion,
+    this.nombre_receptor,
+    this.rut_receptor,
+    this.observaciones,
+    this.firma_path,
+    this.fecha_entrega,
+    this.estado,
+    required String firmaCliente,
   });
 
   Map<String, dynamic> toMap() {
     return {
-      'id_entrega': idEntrega,
-      'id_reparacion': idReparacion,
-      'fecha_entrega': fechaEntrega,
+      'id_entrega': id_entrega,
+      'id_reparacion': id_reparacion,
+      'nombre_receptor': nombre_receptor,
+      'rut_receptor': rut_receptor,
       'observaciones': observaciones,
-      'firma_cliente': firmaCliente,
+      'firma_path': firma_path,
+      'fecha_entrega': fecha_entrega,
       'estado': estado,
     };
   }
 
   factory Entrega.fromMap(Map<String, dynamic> map) {
     return Entrega(
-      idEntrega: map['id_entrega'],
-      idReparacion: map['id_reparacion'],
-      fechaEntrega: map['fecha_entrega'],
-      observaciones: map['observaciones'] ?? '',
-      firmaCliente: map['firma_cliente'] ?? '',
-      estado: map['estado'] ?? 'entregado',
+      id_entrega: map['id_entrega'],
+      id_reparacion: map['id_reparacion'],
+      nombre_receptor: map['nombre_receptor'],
+      rut_receptor: map['rut_receptor'],
+      observaciones: map['observaciones'],
+      firma_path: map['firma_path'],
+      fecha_entrega: map['fecha_entrega'],
+      estado: map['estado'],
+      firmaCliente: '',
     );
   }
 }

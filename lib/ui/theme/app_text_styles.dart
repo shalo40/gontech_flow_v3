@@ -11,4 +11,6 @@ class AppTextStyles {
   static const cuerpo = TextStyle(fontSize: 16, color: AppColors.texto);
 
   static const etiqueta = TextStyle(fontSize: 13, color: AppColors.texto_suave);
+
+  static TextStyle? get tituloCard => null;
 }

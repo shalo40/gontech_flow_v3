@@ -16,6 +16,7 @@ Future<void> mostrarClienteModal(
   final nombreCtrl = TextEditingController(
     text: clienteExistente?.nombre ?? '',
   );
+  final rutCtrl = TextEditingController(text: clienteExistente?.rut ?? '');
   final telefonoCtrl = TextEditingController(
     text: clienteExistente?.telefono ?? '',
   );
@@ -27,8 +28,8 @@ Future<void> mostrarClienteModal(
   );
   final notasCtrl = TextEditingController(text: clienteExistente?.notas ?? '');
 
-  File? fotoSeleccionada = clienteExistente?.foto_path.isNotEmpty == true
-      ? File(clienteExistente!.foto_path)
+  File? fotoSeleccionada = (clienteExistente?.fotoPath?.isNotEmpty ?? false)
+      ? File(clienteExistente!.fotoPath!)
       : null;
 
   final esEdicion = clienteExistente != null;
@@ -95,14 +96,15 @@ Future<void> mostrarClienteModal(
             }
 
             final nuevo = Cliente(
-              id_cliente: clienteExistente?.id_cliente,
+              idCliente: clienteExistente?.idCliente,
               nombre: nombreCtrl.text.trim(),
+              rut: rutCtrl.text.trim(),
               telefono: telefonoCtrl.text.trim(),
               correo: correoCtrl.text.trim(),
               direccion: direccionCtrl.text.trim(),
               notas: notasCtrl.text.trim(),
-              foto_path:
-                  fotoSeleccionada?.path ?? clienteExistente?.foto_path ?? '',
+              fotoPath:
+                  fotoSeleccionada?.path ?? clienteExistente?.fotoPath ?? '',
             );
 
             try {
@@ -115,6 +117,7 @@ Future<void> mostrarClienteModal(
               if (context.mounted) {
                 Navigator.pop(context);
                 onGuardado();
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -173,11 +176,12 @@ Future<void> mostrarClienteModal(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const SizedBox(height: 10),
+
                     // 🖼️ Foto circular interactiva
                     GestureDetector(
                       onTap: seleccionarFoto,
                       child: Hero(
-                        tag: clienteExistente?.id_cliente ?? 'nuevo_cliente',
+                        tag: clienteExistente?.idCliente ?? 'nuevo_cliente',
                         child: CircleAvatar(
                           radius: 55,
                           backgroundColor: Colors.tealAccent.withOpacity(0.15),
@@ -196,8 +200,8 @@ Future<void> mostrarClienteModal(
                     ),
                     const SizedBox(height: 18),
 
-                    // Campos
                     _campo(nombreCtrl, 'Nombre completo', Icons.person),
+                    _campo(rutCtrl, 'RUT', Icons.badge_outlined),
                     _campo(telefonoCtrl, 'Teléfono', Icons.phone),
                     _campo(
                       correoCtrl,

@@ -88,7 +88,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
     );
 
     if (ok == true) {
-      await dao.eliminar(c.id_cliente!);
+      await dao.eliminar(c.idCliente!);
       await _cargar();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -138,38 +138,42 @@ class _ClientesScreenState extends State<ClientesScreen> {
 
             // 📋 Lista agrupada
             Expanded(
-              child: _filtrados.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No hay clientes registrados.',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    )
-                  : ListView(
-                      children: grupos.entries.map((entry) {
-                        final letra = entry.key;
-                        final items = entry.value;
+              child: RefreshIndicator(
+                onRefresh: _cargar,
+                color: Colors.tealAccent,
+                child: _filtrados.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No hay clientes registrados.',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      )
+                    : ListView(
+                        children: grupos.entries.map((entry) {
+                          final letra = entry.key;
+                          final items = entry.value;
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
-                              child: Text(
-                                letra,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  letterSpacing: 1.2,
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
+                                child: Text(
+                                  letra,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    letterSpacing: 1.2,
+                                  ),
                                 ),
                               ),
-                            ),
-                            ...items.map((c) => _tarjetaCliente(c)),
-                          ],
-                        );
-                      }).toList(),
-                    ),
+                              ...items.map((c) => _tarjetaCliente(c)),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+              ),
             ),
           ],
         ),
@@ -187,20 +191,23 @@ class _ClientesScreenState extends State<ClientesScreen> {
       child: ExpansionTile(
         leading: GestureDetector(
           onTap: () {
-            if (c.foto_path.isNotEmpty) {
-              _mostrarFotoAmpliada(c);
-            }
+            if (c.fotoPath?.isNotEmpty ?? false) _mostrarFotoAmpliada(c);
           },
           child: Hero(
-            tag: 'cliente_${c.id_cliente ?? c.nombre}',
+            tag: 'cliente_${c.idCliente ?? c.nombre}',
             child: CircleAvatar(
               radius: 22,
               backgroundColor: Colors.tealAccent.withOpacity(0.15),
-              backgroundImage: (c.foto_path.isNotEmpty)
-                  ? FileImage(File(c.foto_path))
+              backgroundImage: (c.fotoPath?.isNotEmpty ?? false)
+                  ? FileImage(File(c.fotoPath!))
                   : null,
-              child: (c.foto_path.isEmpty)
-                  ? const Icon(Icons.person, color: Colors.tealAccent)
+              child: (c.fotoPath?.isEmpty ?? true)
+                  ? Icon(
+                      c.rut?.isNotEmpty ?? false
+                          ? Icons.folder_shared
+                          : Icons.person,
+                      color: Colors.tealAccent,
+                    )
                   : null,
             ),
           ),
@@ -218,7 +225,11 @@ class _ClientesScreenState extends State<ClientesScreen> {
           ),
         ),
         subtitle: Text(
-          [c.telefono, c.correo].where((s) => s.trim().isNotEmpty).join(' • '),
+          [
+            if ((c.rut ?? '').isNotEmpty) c.rut!,
+            if ((c.telefono).trim().isNotEmpty) c.telefono,
+            if ((c.correo).trim().isNotEmpty) c.correo,
+          ].join(' • '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(color: Colors.white60, fontSize: 13),
@@ -232,7 +243,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
             icon: Icons.playlist_add,
             texto: 'Registrar ingreso',
             onTap: () async {
-              await mostrarIngresoModal(context, c.id_cliente!);
+              await mostrarIngresoModal(context, c.idCliente!);
               await _cargar();
             },
           ),
@@ -269,10 +280,10 @@ class _ClientesScreenState extends State<ClientesScreen> {
         child: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Hero(
-            tag: 'cliente_${c.id_cliente ?? c.nombre}',
+            tag: 'cliente_${c.idCliente ?? c.nombre}',
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Image.file(File(c.foto_path), fit: BoxFit.cover),
+              child: Image.file(File(c.fotoPath!), fit: BoxFit.cover),
             ),
           ),
         ),

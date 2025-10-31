@@ -1,39 +1,47 @@
 class Cliente {
-  final int? id_cliente;
-  final String nombre;
-  final String telefono;
-  final String correo;
-  final String direccion;
-  final String notas;
-  final String foto_path; // 🆕 nuevo campo
+  int? idCliente;
+  String nombre;
+  String telefono;
+  String correo;
+  String direccion;
+  String notas;
+  String? fotoPath;
+
+  var rut; // opcional (para imagen o firma)
 
   Cliente({
-    this.id_cliente,
+    this.idCliente,
     required this.nombre,
     required this.telefono,
     required this.correo,
     required this.direccion,
     required this.notas,
-    this.foto_path = '', // valor por defecto
+    this.fotoPath,
+    required String rut,
   });
 
-  Map<String, dynamic> to_map() => {
-    'id_cliente': id_cliente,
-    'nombre': nombre,
-    'telefono': telefono,
-    'correo': correo,
-    'direccion': direccion,
-    'notas': notas,
-    'foto_path': foto_path, // 🆕
-  };
+  Map<String, dynamic> toMap() {
+    return {
+      'id_cliente': idCliente,
+      'nombre': nombre,
+      'telefono': telefono,
+      'correo': correo,
+      'direccion': direccion,
+      'notas': notas,
+      'foto_path': fotoPath,
+    };
+  }
 
-  factory Cliente.from_map(Map<String, dynamic> map) => Cliente(
-    id_cliente: map['id_cliente'] as int?,
-    nombre: map['nombre'] ?? '',
-    telefono: map['telefono'] ?? '',
-    correo: map['correo'] ?? '',
-    direccion: map['direccion'] ?? '',
-    notas: map['notas'] ?? '',
-    foto_path: map['foto_path'] ?? '', // 🆕
-  );
+  factory Cliente.fromMap(Map<String, dynamic> map) {
+    return Cliente(
+      idCliente: map['id_cliente'],
+      nombre: map['nombre'] ?? '',
+      telefono: map['telefono'] ?? '',
+      correo: map['correo'] ?? '',
+      direccion: map['direccion'] ?? '',
+      notas: map['notas'] ?? '',
+      fotoPath: map['foto_path'],
+      rut: '',
+    );
+  }
 }

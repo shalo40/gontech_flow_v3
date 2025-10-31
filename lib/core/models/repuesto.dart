@@ -1,46 +1,55 @@
 class Repuesto {
-  int? id_repuesto;
-  int? id_presupuesto;
-  int? id_diagnostico;
-  String nombre;
+  int? idRepuesto;
+  int? idDiagnostico;
+  int? idPresupuesto;
+  String? nombre;
   int cantidad;
-  double? costo_unitario;
-  String proveedor;
+  double? costoUnitario;
+  String? proveedor;
   String estado;
   String origen;
+  String? fechaRegistro;
 
   Repuesto({
-    this.id_repuesto,
-    this.id_presupuesto,
-    this.id_diagnostico,
-    required this.nombre,
+    this.idRepuesto,
+    this.idDiagnostico,
+    this.idPresupuesto,
+    this.nombre,
     this.cantidad = 1,
-    this.costo_unitario,
-    this.proveedor = '',
-    this.estado = 'sugerido',
+    this.costoUnitario,
+    this.proveedor,
+    this.estado = 'pendiente',
     this.origen = 'diagnostico',
+    this.fechaRegistro,
   });
 
-  Map<String, dynamic> toMap() => {
-    'id_presupuesto': id_presupuesto,
-    'id_diagnostico': id_diagnostico,
-    'nombre': nombre,
-    'cantidad': cantidad,
-    'costo_unitario': costo_unitario,
-    'proveedor': proveedor,
-    'estado': estado,
-    'origen': origen,
-  };
+  Map<String, dynamic> toMap() {
+    return {
+      'id_repuesto': idRepuesto,
+      'id_diagnostico': idDiagnostico,
+      'id_presupuesto': idPresupuesto,
+      'nombre': nombre,
+      'cantidad': cantidad,
+      'costo_unitario': costoUnitario,
+      'proveedor': proveedor,
+      'estado': estado,
+      'origen': origen,
+      'fecha_registro': fechaRegistro ?? DateTime.now().toIso8601String(),
+    };
+  }
 
-  factory Repuesto.fromMap(Map<String, dynamic> map) => Repuesto(
-    id_repuesto: map['id_repuesto'],
-    id_presupuesto: map['id_presupuesto'],
-    id_diagnostico: map['id_diagnostico'],
-    nombre: map['nombre'] ?? '',
-    cantidad: map['cantidad'] ?? 1,
-    costo_unitario: map['costo_unitario']?.toDouble(),
-    proveedor: map['proveedor'] ?? '',
-    estado: map['estado'] ?? 'sugerido',
-    origen: map['origen'] ?? 'diagnostico',
-  );
+  factory Repuesto.fromMap(Map<String, dynamic> map) {
+    return Repuesto(
+      idRepuesto: map['id_repuesto'],
+      idDiagnostico: map['id_diagnostico'],
+      idPresupuesto: map['id_presupuesto'],
+      nombre: map['nombre'],
+      cantidad: map['cantidad'] ?? 1,
+      costoUnitario: (map['costo_unitario'] ?? 0).toDouble(),
+      proveedor: map['proveedor'],
+      estado: map['estado'] ?? 'pendiente',
+      origen: map['origen'] ?? 'diagnostico',
+      fechaRegistro: map['fecha_registro'],
+    );
+  }
 }

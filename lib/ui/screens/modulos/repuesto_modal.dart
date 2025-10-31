@@ -6,89 +6,137 @@ import '../../theme/app_colors.dart';
 Future<void> mostrarRepuestoModal({
   required BuildContext context,
   required int idReferencia,
-  required String origen, // "diagnostico" o "presupuesto"
+  required String origen, // 'diagnostico' o 'reparacion'
 }) async {
   final dao = RepuestoDao();
-
   final nombreCtrl = TextEditingController();
+  final proveedorCtrl = TextEditingController();
   final cantidadCtrl = TextEditingController(text: '1');
   final costoCtrl = TextEditingController();
-  final proveedorCtrl = TextEditingController();
 
   await showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (context) => AlertDialog(
-      backgroundColor: AppColors.fondo,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text(
-        origen == 'diagnostico'
-            ? 'Agregar repuesto sugerido'
-            : 'Agregar repuesto al presupuesto',
-        style: const TextStyle(color: Colors.white),
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    builder: (context) {
+      return AlertDialog(
+        backgroundColor: AppColors.fondo.withOpacity(0.95),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
           children: [
-            _campo(nombreCtrl, 'Nombre del repuesto'),
-            _campo(cantidadCtrl, 'Cantidad', tipo: TextInputType.number),
-            if (origen == 'presupuesto')
-              _campo(
-                costoCtrl,
-                'Costo unitario (CLP)',
-                tipo: TextInputType.number,
+            const Icon(Icons.build_circle, color: Colors.tealAccent),
+            const SizedBox(width: 8),
+            Text(
+              origen == 'diagnostico'
+                  ? 'Agregar repuesto sugerido'
+                  : 'Agregar repuesto instalado',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
-            if (origen == 'presupuesto') _campo(proveedorCtrl, 'Proveedor'),
+            ),
           ],
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text(
-            'Cancelar',
-            style: TextStyle(color: Colors.redAccent),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _campo(nombreCtrl, 'Nombre del repuesto', Icons.memory),
+              _campo(proveedorCtrl, 'Proveedor', Icons.store_mall_directory),
+              Row(
+                children: [
+                  Expanded(
+                    child: _campo(
+                      cantidadCtrl,
+                      'Cantidad',
+                      Icons.format_list_numbered,
+                      tipo: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _campo(
+                      costoCtrl,
+                      'Costo unitario',
+                      Icons.attach_money,
+                      tipo: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.tealAccent),
-          onPressed: () async {
-            if (nombreCtrl.text.isEmpty) return;
-
-            final repuesto = Repuesto(
-              nombre: nombreCtrl.text,
-              cantidad: int.tryParse(cantidadCtrl.text) ?? 1,
-              costo_unitario: double.tryParse(costoCtrl.text),
-              proveedor: proveedorCtrl.text,
-              origen: origen,
-              id_diagnostico: origen == 'diagnostico' ? idReferencia : null,
-              id_presupuesto: origen == 'presupuesto' ? idReferencia : null,
-            );
-
-            await dao.insertar(repuesto);
-            if (context.mounted) Navigator.pop(context);
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  origen == 'diagnostico'
-                      ? 'Repuesto sugerido agregado 🧩'
-                      : 'Repuesto añadido al presupuesto 💰',
-                ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.cancel, color: Colors.redAccent),
+            label: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.tealAccent.withOpacity(0.2),
+              foregroundColor: Colors.tealAccent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-            );
-          },
-          child: const Text('Guardar'),
-        ),
-      ],
-    ),
+            ),
+            icon: const Icon(Icons.save),
+            label: const Text('Guardar'),
+            onPressed: () async {
+              if (nombreCtrl.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Debes ingresar al menos el nombre.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              final repuesto = Repuesto(
+                nombre: nombreCtrl.text,
+                proveedor: proveedorCtrl.text,
+                cantidad: int.tryParse(cantidadCtrl.text) ?? 1,
+                costoUnitario: double.tryParse(costoCtrl.text) ?? 0.0,
+                estado: origen == 'diagnostico' ? 'sugerido' : 'instalado',
+                origen: origen,
+                idDiagnostico: origen == 'diagnostico' ? idReferencia : null,
+                idPresupuesto: null,
+              );
+
+              if (origen == 'reparacion') {
+                // si en tu modelo agregas id_reparacion
+                repuesto.idPresupuesto = idReferencia;
+              }
+
+              await dao.insertar(repuesto);
+
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      origen == 'diagnostico'
+                          ? '🔧 Repuesto sugerido agregado'
+                          : '🧩 Repuesto instalado registrado',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+          ),
+        ],
+      );
+    },
   );
 }
 
 Widget _campo(
   TextEditingController ctrl,
-  String label, {
+  String label,
+  IconData icono, {
   TextInputType tipo = TextInputType.text,
 }) {
   return Padding(
@@ -98,6 +146,7 @@ Widget _campo(
       keyboardType: tipo,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
+        prefixIcon: Icon(icono, color: Colors.tealAccent),
         labelText: label,
         labelStyle: const TextStyle(color: Colors.white70),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

@@ -39,6 +39,22 @@ class ReparacionDao {
     );
   }
 
+  // 👇 NUEVO MÉTODO
+  Future<void> insertarDesdePresupuesto(
+    int idPresupuesto,
+    int idDiagnostico,
+  ) async {
+    final db = await dbProvider.db;
+    await db.insert('reparaciones', {
+      'id_presupuesto': idPresupuesto,
+      'id_diagnostico': idDiagnostico,
+      'descripcion':
+          'Reparación generada automáticamente al autorizar el presupuesto.',
+      'fecha_inicio': DateTime.now().toIso8601String(),
+      'estado': 'en_proceso',
+    });
+  }
+
   Future<List<Map<String, dynamic>>> listarDetallado() async {
     final db = await dbProvider.db;
     return await db.rawQuery('''

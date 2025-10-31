@@ -40,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen>
   };
 
   List<Map<String, dynamic>> ultimosIngresos = [];
+  bool _cargando = false;
 
   @override
   void initState() {
@@ -50,28 +51,38 @@ class _HomeScreenState extends State<HomeScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
     _controller.forward();
+
+    // 🔁 Recarga doble: al iniciar y tras primer frame (sin romper nada)
     cargarDatos();
+    WidgetsBinding.instance.addPostFrameCallback((_) => cargarDatos());
   }
 
   Future<void> cargarDatos() async {
-    final clientes = await clienteDao.listar();
-    final equipos = await equipoDao.listarDetallado();
-    final ingresos = await ingresoDao.listarIngresosDetallados();
-    final diagnosticos = await diagnosticoDao.listarDetallado();
-    final presupuestos = await presupuestoDao.listarDetallado();
-    final reparaciones = await reparacionDao.listarDetallado();
+    if (!mounted) return;
+    setState(() => _cargando = true);
+    try {
+      final clientes = await clienteDao.listar();
+      final equipos = await equipoDao.listarDetallado();
+      final ingresos = await ingresoDao.listarIngresosDetallados();
+      final diagnosticos = await diagnosticoDao.listarDetallado();
+      final presupuestos = await presupuestoDao.listarDetallado();
+      final reparaciones = await reparacionDao.listarDetallado();
 
-    setState(() {
-      resumen = {
-        'Clientes': clientes.length,
-        'Equipos': equipos.length,
-        'Ingresos': ingresos.length,
-        'Diagnósticos': diagnosticos.length,
-        'Presupuestos': presupuestos.length,
-        'Reparaciones': reparaciones.length,
-      };
-      ultimosIngresos = ingresos.take(5).toList();
-    });
+      if (!mounted) return;
+      setState(() {
+        resumen = {
+          'Clientes': clientes.length,
+          'Equipos': equipos.length,
+          'Ingresos': ingresos.length,
+          'Diagnósticos': diagnosticos.length,
+          'Presupuestos': presupuestos.length,
+          'Reparaciones': reparaciones.length,
+        };
+        ultimosIngresos = ingresos.take(5).toList();
+      });
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
   }
 
   @override
@@ -80,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  // 🧭 Mapa de rutas por módulo
+  // 🧭 Rutas de módulos
   final Map<String, String> rutas = {
     'Clientes': '/clientes',
     'Equipos': '/equipos',
@@ -90,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen>
     'Reparaciones': '/reparaciones',
   };
 
-  // 🎨 Colores base por módulo
+  // 🎨 Colores base
   final Map<String, Color> colores = {
     'Clientes': Colors.blueAccent,
     'Equipos': Colors.purpleAccent,
@@ -121,93 +132,105 @@ class _HomeScreenState extends State<HomeScreen>
           child: RefreshIndicator(
             onRefresh: cargarDatos,
             color: Colors.tealAccent,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Bienvenido 👋', style: AppTextStyles.titulo),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Resumen general del taller',
-                    style: AppTextStyles.etiqueta,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 🧱 GRID resumen dinámico
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: resumen.length,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: ancho < 600
-                          ? 2
-                          : ancho < 900
-                          ? 3
-                          : 4,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: ancho < 400 ? 1 : 1.15,
+            child: _cargando
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 200),
+                      child: CircularProgressIndicator(
+                        color: Colors.tealAccent,
+                      ),
                     ),
-                    itemBuilder: (context, index) {
-                      final key = resumen.keys.elementAt(index);
-                      return _tarjetaResumen(
-                        context,
-                        titulo: key,
-                        valor: resumen[key] ?? 0,
-                        icono: iconos[key]!,
-                        color: colores[key]!,
-                        ruta: rutas[key]!,
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 30),
-                  Text('Actividad reciente', style: AppTextStyles.titulo),
-                  const SizedBox(height: 10),
-
-                  // 🧾 Últimos ingresos
-                  ultimosIngresos.isEmpty
-                      ? const Text(
-                          'No hay ingresos recientes.',
-                          style: TextStyle(color: Colors.white70),
-                        )
-                      : Column(
-                          children: ultimosIngresos.map((i) {
-                            return Card(
-                              color: AppColors.fondo.withOpacity(0.9),
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: ListTile(
-                                leading: const Icon(
-                                  Icons.laptop_mac,
-                                  color: Colors.tealAccent,
-                                ),
-                                title: Text(
-                                  '${i['tipo_equipo'] ?? ''} ${i['marca'] ?? ''}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'Cliente: ${i['nombre_cliente'] ?? '-'}\n'
-                                  'Fecha: ${i['fecha_ingreso'] ?? '-'}',
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
+                  )
+                : SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bienvenido 👋', style: AppTextStyles.titulo),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Resumen general del taller',
+                          style: AppTextStyles.etiqueta,
                         ),
-                ],
-              ),
-            ),
+                        const SizedBox(height: 20),
+
+                        // 🧱 GRID resumen dinámico
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: resumen.length,
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: ancho < 600
+                                    ? 2
+                                    : ancho < 900
+                                    ? 3
+                                    : 4,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: ancho < 400 ? 1 : 1.15,
+                              ),
+                          itemBuilder: (context, index) {
+                            final key = resumen.keys.elementAt(index);
+                            return _tarjetaResumen(
+                              context,
+                              titulo: key,
+                              valor: resumen[key] ?? 0,
+                              icono: iconos[key]!,
+                              color: colores[key]!,
+                              ruta: rutas[key]!,
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 30),
+                        Text('Actividad reciente', style: AppTextStyles.titulo),
+                        const SizedBox(height: 10),
+
+                        // 🧾 Últimos ingresos
+                        ultimosIngresos.isEmpty
+                            ? const Text(
+                                'No hay ingresos recientes.',
+                                style: TextStyle(color: Colors.white70),
+                              )
+                            : Column(
+                                children: ultimosIngresos.map((i) {
+                                  return Card(
+                                    color: AppColors.fondo.withOpacity(0.9),
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 6,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: ListTile(
+                                      leading: const Icon(
+                                        Icons.laptop_mac,
+                                        color: Colors.tealAccent,
+                                      ),
+                                      title: Text(
+                                        '${i['tipo_equipo'] ?? ''} ${i['marca'] ?? ''}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        'Cliente: ${i['nombre_cliente'] ?? '-'}\n'
+                                        'Fecha: ${i['fecha_ingreso'] ?? '-'}',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                      ],
+                    ),
+                  ),
           ),
         ),
       ),
@@ -239,7 +262,11 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () => Navigator.pushNamed(context, ruta),
+        onTap: () async {
+          await Navigator.pushNamed(context, ruta);
+          if (!mounted) return;
+          await cargarDatos(); // ✅ Refresca al volver del módulo
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Column(

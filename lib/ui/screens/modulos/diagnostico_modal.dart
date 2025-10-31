@@ -47,7 +47,7 @@ Future<void> mostrarDiagnosticoModal(
 
   Future<void> cargarRepuestos() async {
     final data = await repuestoDao.listarPorDiagnostico(idIngreso);
-    repuestos = data;
+    repuestos = data.cast<Repuesto>();
   }
 
   await showDialog(
@@ -215,7 +215,13 @@ Future<void> mostrarDiagnosticoModal(
                             ],
                           ),
                           FutureBuilder<List<Repuesto>>(
-                            future: repuestoDao.listarPorDiagnostico(idIngreso),
+                            future: repuestoDao
+                                .listarPorDiagnostico(idIngreso)
+                                .then(
+                                  (data) => data
+                                      .map((m) => Repuesto.fromMap(m))
+                                      .toList(),
+                                ),
                             builder: (context, snapshot) {
                               if (!snapshot.hasData || snapshot.data!.isEmpty) {
                                 return const Text(
@@ -234,7 +240,7 @@ Future<void> mostrarDiagnosticoModal(
                                       color: Colors.tealAccent,
                                     ),
                                     title: Text(
-                                      r.nombre,
+                                      r.nombre ?? '',
                                       style: const TextStyle(
                                         color: Colors.white,
                                       ),
