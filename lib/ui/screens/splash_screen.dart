@@ -19,7 +19,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _init() async {
-    await DatabaseHelper().db;
+    await DatabaseHelper().database;
     final logged = await _session.esta_autenticado();
     await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;

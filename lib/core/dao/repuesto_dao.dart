@@ -6,20 +6,20 @@ class RepuestoDao {
 
   // 🔹 Insertar nuevo repuesto
   Future<int> insertar(Repuesto r) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.insert('repuestos', r.toMap());
   }
 
   // 🔹 Listar todos los repuestos (básico)
   Future<List<Repuesto>> listarTodos() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query('repuestos');
     return res.map((e) => Repuesto.fromMap(e)).toList();
   }
 
   // 🔹 Listado detallado con joins a diagnóstico, reparación, etc.
   Future<List<Map<String, dynamic>>> listarDetallado() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.rawQuery('''
       SELECT 
         r.id_repuesto,
@@ -48,7 +48,7 @@ class RepuestoDao {
   Future<List<Map<String, dynamic>>> listarPorDiagnostico(
     int idDiagnostico,
   ) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.query(
       'repuestos',
       where: 'id_diagnostico = ?',
@@ -59,7 +59,7 @@ class RepuestoDao {
 
   // 🔹 Actualizar estado
   Future<void> actualizarEstado(int idRepuesto, String nuevoEstado) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     await db.update(
       'repuestos',
       {'estado': nuevoEstado},
@@ -70,7 +70,7 @@ class RepuestoDao {
 
   // 🔹 Eliminar
   Future<void> eliminar(int idRepuesto) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     await db.delete(
       'repuestos',
       where: 'id_repuesto = ?',

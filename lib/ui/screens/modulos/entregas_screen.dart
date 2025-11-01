@@ -7,6 +7,8 @@ import '../../theme/app_text_styles.dart';
 import '../../layout/menu_lateral.dart';
 import 'entrega_modal.dart';
 import 'firma_modal.dart';
+import '../../reports/pdf_entrega.dart';
+import '../../reports/pdf_utils.dart';
 
 class EntregasScreen extends StatefulWidget {
   const EntregasScreen({super.key});
@@ -29,10 +31,12 @@ class _EntregasScreenState extends State<EntregasScreen> {
 
   Future<void> cargar() async {
     final data = await entregaDao.listarDetallado();
-    setState(() {
-      entregas = data;
-      filtradas = data;
-    });
+    if (mounted) {
+      setState(() {
+        entregas = data;
+        filtradas = data;
+      });
+    }
   }
 
   void _filtrar(String texto) {
@@ -110,6 +114,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
         onRefresh: cargar,
         child: Column(
           children: [
+            // 🔍 Barra de búsqueda
             Padding(
               padding: const EdgeInsets.all(10),
               child: TextField(
@@ -133,6 +138,8 @@ class _EntregasScreenState extends State<EntregasScreen> {
                 ),
               ),
             ),
+
+            // 📋 Listado de entregas
             Expanded(
               child: filtradas.isEmpty
                   ? const Center(
@@ -147,6 +154,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
                       itemBuilder: (context, index) {
                         final e = filtradas[index];
                         final color = _colorEstado(e['estado'] ?? 'pendiente');
+
                         return GestureDetector(
                           onTap: () => _mostrarDetalleEntrega(context, e),
                           child: Container(
@@ -206,20 +214,25 @@ class _EntregasScreenState extends State<EntregasScreen> {
     );
   }
 
+  // 🧾 Detalle modal inferior
   void _mostrarDetalleEntrega(
     BuildContext context,
     Map<String, dynamic> entrega,
   ) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.fondo.withOpacity(0.97),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (context) {
         return Padding(
-          padding: const EdgeInsets.all(18),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: SingleChildScrollView(
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -242,6 +255,8 @@ class _EntregasScreenState extends State<EntregasScreen> {
                   ],
                 ),
                 const Divider(height: 20, color: Colors.white24),
+
+                // Datos generales
                 Text(
                   'Cliente: ${entrega['nombre_receptor'] ?? '-'}',
                   style: const TextStyle(color: Colors.white70),
@@ -267,7 +282,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // === Firma del cliente o aviso ===
+                // Firma
                 if (entrega['firma_path'] != null &&
                     entrega['firma_path'].toString().isNotEmpty)
                   Center(
@@ -278,7 +293,11 @@ class _EntregasScreenState extends State<EntregasScreen> {
                           style: TextStyle(color: Colors.white70, fontSize: 14),
                         ),
                         const SizedBox(height: 6),
-                        Image.file(File(entrega['firma_path']), height: 100),
+                        Image.file(
+                          File(entrega['firma_path']),
+                          height: 100,
+                          fit: BoxFit.contain,
+                        ),
                       ],
                     ),
                   )
@@ -292,7 +311,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
 
                 const SizedBox(height: 20),
 
-                // === Botón para registrar firma ===
+                // Botón para registrar firma
                 Center(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -310,10 +329,9 @@ class _EntregasScreenState extends State<EntregasScreen> {
                     },
                   ),
                 ),
-
                 const SizedBox(height: 10),
 
-                // === Botón PDF ===
+                // Botón PDF
                 Center(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -325,8 +343,24 @@ class _EntregasScreenState extends State<EntregasScreen> {
                     ),
                     icon: const Icon(Icons.picture_as_pdf_outlined),
                     label: const Text('Generar comprobante PDF'),
-                    onPressed: () {
-                      // ⚙️ Integrar generación PDF
+                    onPressed: () async {
+                      try {
+                        final file = await PdfEntrega.generar(entrega);
+                        await PdfUtils.abrir(file);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('📄 PDF generado correctamente'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error al generar PDF: $e')),
+                          );
+                        }
+                      }
                     },
                   ),
                 ),

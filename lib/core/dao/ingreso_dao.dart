@@ -6,13 +6,13 @@ class IngresoDAO {
 
   /// Inserta un nuevo ingreso en la base de datos
   Future<int> insertar(Ingreso ingreso) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.insert('ingresos', ingreso.toMap());
   }
 
   /// Retorna todos los ingresos con detalles de equipo y cliente
   Future<List<Map<String, dynamic>>> listarIngresosDetallados() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.rawQuery('''
       SELECT 
         i.*,
@@ -30,7 +30,7 @@ class IngresoDAO {
 
   /// Actualiza el estado de un ingreso directamente por su ID
   Future<int> actualizarEstado(int idIngreso, String nuevoEstado) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.update(
       'ingresos',
       {'estado_ingreso': nuevoEstado},
@@ -44,7 +44,7 @@ class IngresoDAO {
     int idDiagnostico,
     String nuevoEstado,
   ) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
 
     final resultado = await db.query(
       'diagnosticos',
@@ -69,7 +69,7 @@ class IngresoDAO {
     int idReparacion,
     String nuevoEstado,
   ) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
 
     final resultado = await db.rawQuery(
       '''
@@ -94,7 +94,7 @@ class IngresoDAO {
 
   /// Obtiene un ingreso específico por su ID
   Future<Ingreso?> obtenerPorId(int idIngreso) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query(
       'ingresos',
       where: 'id_ingreso = ?',
@@ -107,7 +107,7 @@ class IngresoDAO {
 
   /// Elimina un ingreso (si no tiene dependencias)
   Future<int> eliminar(int idIngreso) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.delete(
       'ingresos',
       where: 'id_ingreso = ?',

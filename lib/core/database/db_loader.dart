@@ -243,7 +243,6 @@ class DbLoader {
         id_reparacion: idReparaciones[1],
         fecha_entrega: DateTime.now().toIso8601String(),
         observaciones: 'Cliente satisfecha con el rendimiento del SSD.',
-        firmaCliente: '', // base64 o firma en blanco por ahora
         estado: 'entregado',
         nombre_receptor: 'Michelle De La Fuente',
         rut_receptor: '17.777.777-7',
@@ -255,7 +254,6 @@ class DbLoader {
             .subtract(const Duration(days: 1))
             .toIso8601String(),
         observaciones: 'Revisión pendiente de pago, cliente aún no retira.',
-        firmaCliente: '',
         estado: 'pendiente_pdf',
         nombre_receptor: 'Gonzalo Castillo De La Fuente',
         rut_receptor: '16.666.666-6',
@@ -271,7 +269,7 @@ class DbLoader {
     debugPrint('✅ Carga de datos demo completada con éxito.');
 
     // === 👤 USUARIOS DEMO ===
-    final db = await DatabaseHelper().db;
+    final db = await DatabaseHelper().database;
     await db.insert('usuarios', {
       'nombre': 'Administrador Gontech',
       'correo': 'admin@gontech.cl',

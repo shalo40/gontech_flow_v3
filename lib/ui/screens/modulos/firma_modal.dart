@@ -20,86 +20,119 @@ Future<void> mostrarFirmaModal(
 
   await showDialog(
     context: context,
+    barrierDismissible: false,
     builder: (context) {
-      return AlertDialog(
+      return Dialog(
         backgroundColor: const Color(0xFF1E1E2C),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Firma del Cliente',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Por favor, firme dentro del recuadro.',
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              height: 180,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                border: Border.all(color: Colors.tealAccent.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12),
+        insetPadding: const EdgeInsets.all(20),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 400,
+                maxHeight: constraints.maxHeight * 0.85,
               ),
-              child: Signature(
-                controller: signatureController,
-                backgroundColor: Colors.black,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton.icon(
-                  icon: const Icon(Icons.refresh, color: Colors.tealAccent),
-                  label: const Text(
-                    'Borrar',
-                    style: TextStyle(color: Colors.tealAccent),
-                  ),
-                  onPressed: () => signatureController.clear(),
-                ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.save, color: Colors.black),
-                  label: const Text('Guardar'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.tealAccent,
-                    foregroundColor: Colors.black,
-                  ),
-                  onPressed: () async {
-                    if (signatureController.isNotEmpty) {
-                      final Uint8List? data = await signatureController
-                          .toPngBytes();
-                      if (data != null) {
-                        final dir = await getApplicationDocumentsDirectory();
-                        final filePath =
-                            '${dir.path}/firma_${DateTime.now().millisecondsSinceEpoch}.png';
-                        final file = File(filePath);
-                        await file.writeAsBytes(data);
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Firma del Cliente',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Por favor, firme dentro del recuadro:',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 12),
 
-                        await entregaDao.actualizarFirma(
-                          idEntrega,
-                          filePath,
-                          data,
-                        );
+                    // 🖋 Área de firma
+                    Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        border: Border.all(color: Colors.tealAccent),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Signature(
+                        controller: signatureController,
+                        backgroundColor: Colors.black,
+                      ),
+                    ),
 
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          onGuardado();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('✍️ Firma guardada correctamente'),
+                    const SizedBox(height: 12),
+
+                    // 🔘 Botones de acción
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(
+                            Icons.refresh,
+                            color: Colors.tealAccent,
+                          ),
+                          label: const Text(
+                            'Borrar',
+                            style: TextStyle(color: Colors.tealAccent),
+                          ),
+                          onPressed: () => signatureController.clear(),
+                        ),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.save, color: Colors.black),
+                          label: const Text('Guardar'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.tealAccent,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          );
-                        }
-                      }
-                    }
-                  },
+                          ),
+                          onPressed: () async {
+                            if (signatureController.isNotEmpty) {
+                              final Uint8List? data = await signatureController
+                                  .toPngBytes();
+                              if (data != null) {
+                                final dir =
+                                    await getApplicationDocumentsDirectory();
+                                final filePath =
+                                    '${dir.path}/firma_${DateTime.now().millisecondsSinceEpoch}.png';
+                                final file = File(filePath);
+                                await file.writeAsBytes(data);
+
+                                await entregaDao.actualizarFirma(
+                                  idEntrega,
+                                  filePath,
+                                );
+
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  onGuardado();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        '✍️ Firma guardada correctamente',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
+              ),
+            );
+          },
         ),
       );
     },

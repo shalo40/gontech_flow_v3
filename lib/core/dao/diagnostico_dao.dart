@@ -10,7 +10,7 @@ class DiagnosticoDao {
   // INSERTAR
   // ==========================
   Future<int> insertar(Diagnostico d) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.insert(
       'diagnosticos',
       d.toMap(),
@@ -22,7 +22,7 @@ class DiagnosticoDao {
   // LISTAR POR INGRESO
   // ==========================
   Future<List<Diagnostico>> listarPorIngreso(int idIngreso) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query(
       'diagnosticos',
       where: 'id_ingreso = ?',
@@ -36,7 +36,7 @@ class DiagnosticoDao {
   // LISTAR TODOS
   // ==========================
   Future<List<Diagnostico>> listarTodos() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query('diagnosticos', orderBy: 'id_diagnostico DESC');
     return res.map((e) => Diagnostico.fromMap(e)).toList();
   }
@@ -45,7 +45,7 @@ class DiagnosticoDao {
   // LISTADO DETALLADO (con equipo y fecha)
   // ==========================
   Future<List<Map<String, dynamic>>> listarDetallado() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.rawQuery('''
       SELECT 
         d.id_diagnostico,
@@ -69,7 +69,7 @@ class DiagnosticoDao {
   // ACTUALIZAR ESTADO
   // ==========================
   Future<int> actualizarEstado(int idDiagnostico, String nuevoEstado) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.update(
       'diagnosticos',
       {'estado': nuevoEstado},
@@ -82,7 +82,7 @@ class DiagnosticoDao {
   // ELIMINAR (por id)
   // ==========================
   Future<int> eliminar(int idDiagnostico) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.delete(
       'diagnosticos',
       where: 'id_diagnostico = ?',

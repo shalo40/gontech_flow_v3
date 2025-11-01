@@ -6,7 +6,7 @@ class Entrega {
   String? observaciones;
   String? firma_path;
   String? fecha_entrega;
-  String? estado;
+  String estado;
 
   Entrega({
     this.id_entrega,
@@ -16,10 +16,10 @@ class Entrega {
     this.observaciones,
     this.firma_path,
     this.fecha_entrega,
-    this.estado,
-    required String firmaCliente,
+    this.estado = 'pendiente', // Valor por defecto
   });
 
+  /// 🔹 Convierte el objeto a un Map para SQLite
   Map<String, dynamic> toMap() {
     return {
       'id_entrega': id_entrega,
@@ -33,6 +33,7 @@ class Entrega {
     };
   }
 
+  /// 🔹 Crea un objeto Entrega a partir de un Map de SQLite
   factory Entrega.fromMap(Map<String, dynamic> map) {
     return Entrega(
       id_entrega: map['id_entrega'],
@@ -42,8 +43,7 @@ class Entrega {
       observaciones: map['observaciones'],
       firma_path: map['firma_path'],
       fecha_entrega: map['fecha_entrega'],
-      estado: map['estado'],
-      firmaCliente: '',
+      estado: map['estado'] ?? 'pendiente',
     );
   }
 }

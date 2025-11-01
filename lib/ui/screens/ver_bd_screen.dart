@@ -24,7 +24,7 @@ class _VerBDScreenState extends State<VerBDScreen> {
   }
 
   Future<void> _cargarTablas() async {
-    final db = await dbHelper.db;
+    final db = await dbHelper.database;
     final res = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;",
     );
@@ -39,7 +39,7 @@ class _VerBDScreenState extends State<VerBDScreen> {
       _tablaSeleccionada = tabla;
     });
 
-    final db = await dbHelper.db;
+    final db = await dbHelper.database;
     final res = await db.rawQuery('SELECT * FROM $tabla');
     setState(() {
       _datos = res;

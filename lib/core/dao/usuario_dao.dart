@@ -6,7 +6,7 @@ class UsuarioDao {
   final _tabla = 'usuarios';
 
   Future<Usuario?> autenticar(String correo, String contrasena) async {
-    final db = await DatabaseHelper().db;
+    final db = await DatabaseHelper().database;
     final res = await db.query(
       _tabla,
       where: 'correo = ? AND contrasena = ?',
@@ -18,7 +18,7 @@ class UsuarioDao {
   }
 
   Future<int> crear(Usuario usuario) async {
-    final db = await DatabaseHelper().db;
+    final db = await DatabaseHelper().database;
     return db.insert(_tabla, usuario.to_map());
   }
 }

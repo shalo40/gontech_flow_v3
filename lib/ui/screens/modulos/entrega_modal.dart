@@ -10,7 +10,7 @@ Future<void> mostrarEntregaModal(BuildContext context) async {
   final ingresoDao = IngresoDAO();
   final reparacionDao = ReparacionDao();
 
-  // 🔍 Obtener reparaciones listas para entregar
+  // 🔍 Reparaciones listas para entrega (estado: en_proceso o listo)
   final reparaciones = await reparacionDao.listarDetallado();
   final reparacionesListas = reparaciones
       .where((r) => r['estado'] == 'en_proceso' || r['estado'] == 'listo')
@@ -18,6 +18,7 @@ Future<void> mostrarEntregaModal(BuildContext context) async {
 
   int? idSeleccionado;
 
+  // ⚠️ Si no hay reparaciones disponibles
   if (reparacionesListas.isEmpty) {
     showDialog(
       context: context,
@@ -46,6 +47,7 @@ Future<void> mostrarEntregaModal(BuildContext context) async {
     return;
   }
 
+  // 🧩 Modal de registro de entrega
   await showDialog(
     context: context,
     barrierDismissible: false,
@@ -59,7 +61,10 @@ Future<void> mostrarEntregaModal(BuildContext context) async {
             ),
             title: const Text(
               'Registrar Entrega',
-              style: TextStyle(color: Colors.white),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             content: SingleChildScrollView(
               child: Column(
@@ -71,15 +76,15 @@ Future<void> mostrarEntregaModal(BuildContext context) async {
                   ),
                   const SizedBox(height: 10),
 
-                  // 🔽 Dropdown con reparaciones disponibles
+                  // 🔽 Lista de reparaciones disponibles
                   DropdownButtonFormField<int>(
                     dropdownColor: const Color(0xFF2A2A3D),
-                    initialValue: idSeleccionado,
+                    value: idSeleccionado,
                     items: reparacionesListas.map<DropdownMenuItem<int>>((r) {
                       return DropdownMenuItem(
                         value: r['id_reparacion'] as int,
                         child: Text(
-                          '${r['descripcion'] ?? 'Reparación'} — ${r['estado']}',
+                          '${r['descripcion'] ?? 'Reparación sin descripción'} — Estado: ${r['estado']}',
                           style: const TextStyle(color: Colors.white),
                         ),
                       );
@@ -125,7 +130,7 @@ Future<void> mostrarEntregaModal(BuildContext context) async {
                 ),
               ),
               ElevatedButton.icon(
-                icon: const Icon(Icons.done_all, color: Colors.white),
+                icon: const Icon(Icons.done_all, color: Colors.black),
                 label: const Text('Confirmar entrega'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.tealAccent,
@@ -134,32 +139,43 @@ Future<void> mostrarEntregaModal(BuildContext context) async {
                 onPressed: idSeleccionado == null
                     ? null
                     : () async {
-                        final entrega = Entrega(
-                          id_reparacion: idSeleccionado!,
-                          observaciones: observacionesCtrl.text,
-                          firma_path: '',
-                          nombre_receptor: '',
-                          rut_receptor: '',
-                          fecha_entrega: DateTime.now().toIso8601String(),
-                          estado: 'entregado',
-                          firmaCliente: '',
-                        );
+                        try {
+                          final entrega = Entrega(
+                            id_reparacion: idSeleccionado!,
+                            observaciones: observacionesCtrl.text,
+                            firma_path: '',
+                            nombre_receptor: '',
+                            rut_receptor: '',
+                            fecha_entrega: DateTime.now().toIso8601String(),
+                            estado: 'pendiente', // estado inicial
+                          );
 
-                        await entregaDao.insertar(entrega);
-                        await ingresoDao.actualizarEstadoDesdeReparacion(
-                          idSeleccionado!,
-                          'finalizado',
-                        );
+                          await entregaDao.insertar(entrega);
 
-                        if (context.mounted) Navigator.pop(context);
+                          // Cambiar el estado del ingreso vinculado
+                          await ingresoDao.actualizarEstadoDesdeReparacion(
+                            idSeleccionado!,
+                            'finalizado',
+                          );
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              '📦 Entrega registrada correctamente',
+                          if (context.mounted) Navigator.pop(context);
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                '📦 Entrega registrada correctamente',
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error al registrar entrega: $e'),
+                              ),
+                            );
+                          }
+                        }
                       },
               ),
             ],

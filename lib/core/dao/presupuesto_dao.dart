@@ -7,18 +7,18 @@ class PresupuestoDao {
   final _reparacionDao = ReparacionDao(); // 👈 nuevo
 
   Future<int> insertar(Presupuesto p) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.insert('presupuestos', p.toMap());
   }
 
   Future<List<Presupuesto>> listarTodos() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query('presupuestos');
     return res.map((e) => Presupuesto.fromMap(e)).toList();
   }
 
   Future<List<Map<String, dynamic>>> listarDetallado() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.rawQuery('''
       SELECT p.*, d.descripcion_falla, e.marca, e.tipo_equipo, c.nombre AS cliente
       FROM presupuestos p
@@ -32,7 +32,7 @@ class PresupuestoDao {
   }
 
   Future<int> actualizarEstado(int idPresupuesto, String nuevoEstado) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query(
       'presupuestos',
       where: 'id_presupuesto = ?',
@@ -63,7 +63,7 @@ class PresupuestoDao {
   }
 
   Future<void> eliminar(int idPresupuesto) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     await db.delete(
       'presupuestos',
       where: 'id_presupuesto = ?',

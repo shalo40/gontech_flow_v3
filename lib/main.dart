@@ -34,7 +34,7 @@ Future<void> main() async {
   // 🧠 Inicialización de la BD
   // ==============================
   final dbHelper = DatabaseHelper();
-  final db = await dbHelper.db;
+  final db = await dbHelper.database;
 
   try {
     // 📊 Verificar si existen datos en clientes

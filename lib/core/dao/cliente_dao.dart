@@ -47,20 +47,20 @@ class ClienteDao {
 
   /// ➕ Inserta un nuevo cliente
   Future<int> insertar(Cliente cliente) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.insert(_tabla, cliente.toMap());
   }
 
   /// 📋 Lista todos los clientes
   Future<List<Cliente>> listar() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query(_tabla, orderBy: 'nombre ASC');
     return res.map((e) => Cliente.fromMap(e)).toList();
   }
 
   /// 🔍 Busca cliente por ID
   Future<Cliente?> obtenerPorId(int id) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query(
       _tabla,
       where: 'id_cliente = ?',
@@ -71,13 +71,13 @@ class ClienteDao {
 
   /// 🧹 Elimina un cliente
   Future<int> eliminar(int id) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.delete(_tabla, where: 'id_cliente = ?', whereArgs: [id]);
   }
 
   /// ✏️ Actualiza un cliente existente
   Future<int> actualizar(Cliente cliente) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.update(
       _tabla,
       cliente.toMap(),
@@ -88,7 +88,7 @@ class ClienteDao {
 
   /// 🧠 Cuenta cuántos clientes hay
   Future<int> contar() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.rawQuery('SELECT COUNT(*) AS total FROM $_tabla');
     return Sqflite.firstIntValue(res) ?? 0;
   }

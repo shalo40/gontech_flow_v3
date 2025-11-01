@@ -3,26 +3,31 @@ import 'package:path/path.dart';
 import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
+  // ============================================================
+  // 🔹 SINGLETON SEGURO (versión final)
+  // ============================================================
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   factory DatabaseHelper() => _instance;
   DatabaseHelper._internal();
 
   static Database? _database;
 
-  Future<Database> get db async {
+  static DatabaseHelper get instance => _instance;
+
+  Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB();
     return _database!;
   }
 
-  // ================================
+  // ============================================================
   // 🚀 Inicialización de la BD
-  // ================================
+  // ============================================================
   Future<Database> _initDB() async {
     final path = join(await getDatabasesPath(), 'gontech_flow_v3.db');
     return await openDatabase(
       path,
-      version: 8, // ⬅️ Subimos versión para forzar onUpgrade()
+      version: 8, // ⬆️ Control de versiones para upgrades
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -44,9 +49,9 @@ class DatabaseHelper {
     await _createHistorial(db);
   }
 
-  // ================================
+  // ============================================================
   // 🧠 MIGRACIONES / UPGRADES
-  // ================================
+  // ============================================================
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     debugPrint('⬆️ Migrando base de datos de v$oldVersion a v$newVersion...');
 
@@ -71,12 +76,10 @@ class DatabaseHelper {
         '✅ Columna fecha_creacion agregada correctamente a presupuestos.',
       );
     }
+
     // --- REPUESTOS ---
     final columnasRepuestos = await db.rawQuery('PRAGMA table_info(repuestos)');
-    final tieneIdDiagnostico = columnasRepuestos.any(
-      (c) => c['name'] == 'id_diagnostico',
-    );
-    if (!tieneIdDiagnostico) {
+    if (!columnasRepuestos.any((c) => c['name'] == 'id_diagnostico')) {
       await db.execute(
         "ALTER TABLE repuestos ADD COLUMN id_diagnostico INTEGER;",
       );
@@ -84,11 +87,7 @@ class DatabaseHelper {
         '✅ Columna id_diagnostico agregada correctamente a repuestos.',
       );
     }
-
-    final tieneFechaRegistro = columnasRepuestos.any(
-      (c) => c['name'] == 'fecha_registro',
-    );
-    if (!tieneFechaRegistro) {
+    if (!columnasRepuestos.any((c) => c['name'] == 'fecha_registro')) {
       await db.execute(
         "ALTER TABLE repuestos ADD COLUMN fecha_registro TEXT DEFAULT CURRENT_TIMESTAMP;",
       );
@@ -96,30 +95,22 @@ class DatabaseHelper {
         '✅ Columna fecha_registro agregada correctamente a repuestos.',
       );
     }
+
     // --- ENTREGAS ---
     final columnasEntregas = await db.rawQuery('PRAGMA table_info(entregas)');
-    final tieneIdReparacion = columnasEntregas.any(
-      (c) => c['name'] == 'id_reparacion',
-    );
-    if (!tieneIdReparacion) {
+    if (!columnasEntregas.any((c) => c['name'] == 'id_reparacion')) {
       await db.execute(
         "ALTER TABLE entregas ADD COLUMN id_reparacion INTEGER;",
       );
       debugPrint('✅ Columna id_reparacion agregada correctamente a entregas.');
     }
-
-    final tieneFirmaCliente = columnasEntregas.any(
-      (c) => c['name'] == 'firma_cliente',
-    );
-    if (!tieneFirmaCliente) {
+    if (!columnasEntregas.any((c) => c['name'] == 'firma_cliente')) {
       await db.execute(
         "ALTER TABLE entregas ADD COLUMN firma_cliente TEXT DEFAULT '';",
       );
       debugPrint('✅ Columna firma_cliente agregada correctamente a entregas.');
     }
-
-    final tieneEstado = columnasEntregas.any((c) => c['name'] == 'estado');
-    if (!tieneEstado) {
+    if (!columnasEntregas.any((c) => c['name'] == 'estado')) {
       await db.execute(
         "ALTER TABLE entregas ADD COLUMN estado TEXT DEFAULT 'pendiente_pdf';",
       );
@@ -127,9 +118,9 @@ class DatabaseHelper {
     }
   }
 
-  // ================================
+  // ============================================================
   // 🧱 ESTRUCTURAS DE TABLAS
-  // ================================
+  // ============================================================
 
   Future<void> _createClientes(Database db) async {
     await db.execute('''
@@ -184,50 +175,50 @@ class DatabaseHelper {
 
   Future<void> _createDiagnosticos(Database db) async {
     await db.execute('''
-    CREATE TABLE IF NOT EXISTS diagnosticos (
-      id_diagnostico INTEGER PRIMARY KEY AUTOINCREMENT,
-      id_ingreso INTEGER NOT NULL,
-      id_tecnico INTEGER,
-      descripcion_falla TEXT,
-      pruebas_realizadas TEXT,
-      conclusiones TEXT,
-      estado TEXT DEFAULT 'pendiente',
-      creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso) ON DELETE CASCADE
-    );
-  ''');
+      CREATE TABLE IF NOT EXISTS diagnosticos (
+        id_diagnostico INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_ingreso INTEGER NOT NULL,
+        id_tecnico INTEGER,
+        descripcion_falla TEXT,
+        pruebas_realizadas TEXT,
+        conclusiones TEXT,
+        estado TEXT DEFAULT 'pendiente',
+        creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso) ON DELETE CASCADE
+      );
+    ''');
   }
 
   Future<void> _createPresupuestos(Database db) async {
     await db.execute('''
-    CREATE TABLE IF NOT EXISTS presupuestos (
-      id_presupuesto INTEGER PRIMARY KEY AUTOINCREMENT,
-      id_diagnostico INTEGER NOT NULL,
-      descripcion TEXT,
-      total REAL,
-      estado TEXT DEFAULT 'pendiente',
-      fecha_creacion TEXT,
-      FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE
-    );
-  ''');
+      CREATE TABLE IF NOT EXISTS presupuestos (
+        id_presupuesto INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_diagnostico INTEGER NOT NULL,
+        descripcion TEXT,
+        total REAL,
+        estado TEXT DEFAULT 'pendiente',
+        fecha_creacion TEXT,
+        FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE
+      );
+    ''');
   }
 
   Future<void> _createReparaciones(Database db) async {
     await db.execute('''
-    CREATE TABLE IF NOT EXISTS reparaciones (
-      id_reparacion INTEGER PRIMARY KEY AUTOINCREMENT,
-      id_presupuesto INTEGER,  -- 🔥 nuevo campo
-      id_diagnostico INTEGER NOT NULL,
-      id_tecnico INTEGER,
-      descripcion TEXT,
-      fecha_inicio TEXT,
-      fecha_fin TEXT,
-      estado TEXT DEFAULT 'pendiente', -- pendiente | en_proceso | finalizada
-      notas TEXT,
-      FOREIGN KEY (id_presupuesto) REFERENCES presupuestos(id_presupuesto) ON DELETE SET NULL,
-      FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE
-    );
-  ''');
+      CREATE TABLE IF NOT EXISTS reparaciones (
+        id_reparacion INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_presupuesto INTEGER,
+        id_diagnostico INTEGER NOT NULL,
+        id_tecnico INTEGER,
+        descripcion TEXT,
+        fecha_inicio TEXT,
+        fecha_fin TEXT,
+        estado TEXT DEFAULT 'pendiente', -- pendiente | en_proceso | finalizada
+        notas TEXT,
+        FOREIGN KEY (id_presupuesto) REFERENCES presupuestos(id_presupuesto) ON DELETE SET NULL,
+        FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE
+      );
+    ''');
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_reparaciones_diag ON reparaciones(id_diagnostico);',
     );
@@ -235,38 +226,37 @@ class DatabaseHelper {
 
   Future<void> _createRepuestos(Database db) async {
     await db.execute('''
-    CREATE TABLE IF NOT EXISTS repuestos (
-      id_repuesto INTEGER PRIMARY KEY AUTOINCREMENT,
-      id_diagnostico INTEGER,
-      id_presupuesto INTEGER NOT NULL,
-      nombre TEXT,
-      cantidad INTEGER DEFAULT 1,
-      costo_unitario REAL,
-      proveedor TEXT,
-      estado TEXT DEFAULT 'sugerido', -- sugerido | instalado | rechazado
-      origen TEXT DEFAULT 'diagnostico',
-      fecha_registro TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE,
-      FOREIGN KEY (id_presupuesto) REFERENCES presupuestos(id_presupuesto) ON DELETE CASCADE
-    );
-  ''');
+      CREATE TABLE IF NOT EXISTS repuestos (
+        id_repuesto INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_diagnostico INTEGER,
+        id_presupuesto INTEGER NOT NULL,
+        nombre TEXT,
+        cantidad INTEGER DEFAULT 1,
+        costo_unitario REAL,
+        proveedor TEXT,
+        estado TEXT DEFAULT 'sugerido', -- sugerido | instalado | rechazado
+        origen TEXT DEFAULT 'diagnostico',
+        fecha_registro TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE,
+        FOREIGN KEY (id_presupuesto) REFERENCES presupuestos(id_presupuesto) ON DELETE CASCADE
+      );
+    ''');
   }
 
   Future<void> _createEntregas(Database db) async {
     await db.execute('''
-    CREATE TABLE IF NOT EXISTS entregas (
-      id_entrega INTEGER PRIMARY KEY AUTOINCREMENT,
-      id_reparacion INTEGER NOT NULL,
-      nombre_receptor TEXT,
-      rut_receptor TEXT,
-      observaciones TEXT,
-      firma_path TEXT,
-      fecha_entrega TEXT DEFAULT CURRENT_TIMESTAMP,
-      estado TEXT DEFAULT 'entregado', -- entregado | pendiente | anulado
-      FOREIGN KEY (id_reparacion) REFERENCES reparaciones(id_reparacion) ON DELETE CASCADE
-    );
-  ''');
-
+      CREATE TABLE IF NOT EXISTS entregas (
+        id_entrega INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_reparacion INTEGER NOT NULL,
+        nombre_receptor TEXT,
+        rut_receptor TEXT,
+        observaciones TEXT,
+        firma_path TEXT,
+        fecha_entrega TEXT DEFAULT CURRENT_TIMESTAMP,
+        estado TEXT DEFAULT 'entregado', -- entregado | pendiente | anulado
+        FOREIGN KEY (id_reparacion) REFERENCES reparaciones(id_reparacion) ON DELETE CASCADE
+      );
+    ''');
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_entregas_reparacion ON entregas(id_reparacion);',
     );

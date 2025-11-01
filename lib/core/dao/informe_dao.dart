@@ -5,12 +5,12 @@ class InformeDao {
   final dbProvider = DatabaseHelper();
 
   Future<int> insertar(Informe i) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.insert('informes', i.toMap());
   }
 
   Future<List<Informe>> listarPorDiagnostico(int idDiagnostico) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     final res = await db.query(
       'informes',
       where: 'id_diagnostico = ?',
@@ -21,7 +21,7 @@ class InformeDao {
   }
 
   Future<List<Map<String, dynamic>>> listarDetallado() async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     return await db.rawQuery('''
       SELECT 
         i.id_informe,
@@ -42,7 +42,7 @@ class InformeDao {
   }
 
   Future<void> eliminar(int idInforme) async {
-    final db = await dbProvider.db;
+    final db = await dbProvider.database;
     await db.delete(
       'informes',
       where: 'id_informe = ?',
