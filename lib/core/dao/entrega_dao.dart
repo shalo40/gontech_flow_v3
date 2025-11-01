@@ -1,4 +1,3 @@
-import 'package:sqflite/sqflite.dart';
 import '../database/database_helper.dart';
 import '../models/entrega.dart';
 
@@ -41,6 +40,20 @@ class EntregaDao {
       entrega.toMap(),
       where: 'id_entrega = ?',
       whereArgs: [entrega.id_entrega],
+    );
+  }
+
+  Future<void> actualizarFirma(
+    int idEntrega,
+    String firmaPath,
+    dynamic dbHelper,
+  ) async {
+    final db = await dbHelper.db;
+    await db.update(
+      'entregas',
+      {'firma_path': firmaPath},
+      where: 'id_entrega = ?',
+      whereArgs: [idEntrega],
     );
   }
 }

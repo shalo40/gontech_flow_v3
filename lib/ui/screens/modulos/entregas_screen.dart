@@ -2,11 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/dao/entrega_dao.dart';
-import '../../../core/models/entrega.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../layout/menu_lateral.dart';
-import 'entrega_modal.dart'; // modal de entrega
+import 'entrega_modal.dart';
+import 'firma_modal.dart';
 
 class EntregasScreen extends StatefulWidget {
   const EntregasScreen({super.key});
@@ -266,6 +266,8 @@ class _EntregasScreenState extends State<EntregasScreen> {
                   style: const TextStyle(color: Colors.white),
                 ),
                 const SizedBox(height: 20),
+
+                // === Firma del cliente o aviso ===
                 if (entrega['firma_path'] != null &&
                     entrega['firma_path'].toString().isNotEmpty)
                   Center(
@@ -287,7 +289,31 @@ class _EntregasScreenState extends State<EntregasScreen> {
                       style: TextStyle(color: Colors.white54),
                     ),
                   ),
+
                 const SizedBox(height: 20),
+
+                // === Botón para registrar firma ===
+                Center(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.tealAccent.withOpacity(0.2),
+                      foregroundColor: Colors.tealAccent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.border_color_outlined),
+                    label: const Text('Registrar Firma del Cliente'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      mostrarFirmaModal(context, entrega['id_entrega'], cargar);
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // === Botón PDF ===
                 Center(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
