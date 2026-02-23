@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../core/session/auth_service.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/auth_provider.dart';
 import '../components/custom_text_field.dart';
 import '../components/custom_button.dart';
 import '../components/biometric_button.dart';
@@ -17,20 +18,17 @@ class _LoginScreenState extends State<LoginScreen> {
     text: 'admin@gontech.cl',
   );
   final TextEditingController passCtrl = TextEditingController(text: '1234');
-  final AuthService _auth = AuthService();
-  bool cargando = false;
 
   Future<void> _intentarLogin() async {
-    setState(() => cargando = true);
-    final ok = await _auth.login(correoCtrl.text, passCtrl.text);
-    setState(() => cargando = false);
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.login(correoCtrl.text, passCtrl.text);
     if (!mounted) return;
     if (ok) {
       Navigator.pushReplacementNamed(context, '/home');
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Credenciales inválidas')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Credenciales invalidas')),
+      );
     }
   }
 
@@ -57,35 +55,41 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          CustomTextField(
-                            controller: correoCtrl,
-                            etiqueta: 'Correo',
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            controller: passCtrl,
-                            etiqueta: 'Contraseña',
-                            esContrasena: true,
-                          ),
-                          const SizedBox(height: 24),
-                          cargando
-                              ? const CircularProgressIndicator()
-                              : CustomButton(
-                                  texto: 'Ingresar',
-                                  onPressed: _intentarLogin,
-                                ),
-                          const SizedBox(height: 12),
-                          BiometricButton(onAuthenticated: _intentarLogin),
-                        ],
+                      child: Consumer<AuthProvider>(
+                        builder: (context, auth, _) {
+                          return Column(
+                            children: [
+                              CustomTextField(
+                                controller: correoCtrl,
+                                etiqueta: 'Correo',
+                              ),
+                              const SizedBox(height: 16),
+                              CustomTextField(
+                                controller: passCtrl,
+                                etiqueta: 'Contrasena',
+                                esContrasena: true,
+                              ),
+                              const SizedBox(height: 24),
+                              auth.loading
+                                  ? const CircularProgressIndicator()
+                                  : CustomButton(
+                                      texto: 'Ingresar',
+                                      onPressed: _intentarLogin,
+                                    ),
+                              const SizedBox(height: 12),
+                              BiometricButton(
+                                onAuthenticated: _intentarLogin,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),
                   const Spacer(),
                   Center(
                     child: Text(
-                      'v3.0 • UI Renovada',
+                      'v3.0 - UI Renovada',
                       style: AppTextStyles.etiqueta,
                     ),
                   ),

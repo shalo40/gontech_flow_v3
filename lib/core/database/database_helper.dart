@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter/foundation.dart';
+import '../session/password_hasher.dart';
 
 class DatabaseHelper {
   // ============================================================
@@ -27,7 +28,7 @@ class DatabaseHelper {
     final path = join(await getDatabasesPath(), 'gontech_flow_v3.db');
     return await openDatabase(
       path,
-      version: 8, // ⬆️ Control de versiones para upgrades
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -61,7 +62,11 @@ class DatabaseHelper {
       await db.execute(
         "ALTER TABLE clientes ADD COLUMN foto_path TEXT DEFAULT '';",
       );
-      debugPrint('✅ Columna foto_path agregada correctamente a clientes.');
+    }
+    if (!columnasClientes.any((c) => c['name'] == 'rut')) {
+      await db.execute(
+        "ALTER TABLE clientes ADD COLUMN rut TEXT DEFAULT '';",
+      );
     }
 
     // --- PRESUPUESTOS ---
@@ -114,8 +119,31 @@ class DatabaseHelper {
       await db.execute(
         "ALTER TABLE entregas ADD COLUMN estado TEXT DEFAULT 'pendiente_pdf';",
       );
-      debugPrint('✅ Columna estado agregada correctamente a entregas.');
+      debugPrint('Columna estado agregada correctamente a entregas.');
     }
+
+    // --- v9: MIGRAR CONTRASEÑAS A SHA-256 ---
+    if (oldVersion < 9) {
+      await _migratePasswords(db);
+    }
+  }
+
+  Future<void> _migratePasswords(Database db) async {
+    final usuarios = await db.query('usuarios');
+    for (final u in usuarios) {
+      final contrasena = u['contrasena'] as String? ?? '';
+      // Si la contraseña no tiene 64 chars (longitud SHA-256 hex), está en texto plano
+      if (contrasena.length != 64) {
+        final hashed = PasswordHasher.hash(contrasena);
+        await db.update(
+          'usuarios',
+          {'contrasena': hashed},
+          where: 'id_usuario = ?',
+          whereArgs: [u['id_usuario']],
+        );
+      }
+    }
+    debugPrint('Migracion de contrasenas a SHA-256 completada.');
   }
 
   // ============================================================

@@ -1,6 +1,6 @@
-// ---------- lib/core/dao/usuario_dao.dart ----------
 import '../database/database_helper.dart';
 import '../models/usuario.dart';
+import '../session/password_hasher.dart';
 
 class UsuarioDao {
   final _tabla = 'usuarios';
@@ -9,16 +9,23 @@ class UsuarioDao {
     final db = await DatabaseHelper().database;
     final res = await db.query(
       _tabla,
-      where: 'correo = ? AND contrasena = ?',
-      whereArgs: [correo.trim(), contrasena],
+      where: 'correo = ?',
+      whereArgs: [correo.trim()],
       limit: 1,
     );
-    if (res.isNotEmpty) return Usuario.from_map(res.first);
+    if (res.isEmpty) return null;
+
+    final usuario = Usuario.fromMap(res.first);
+    if (PasswordHasher.verify(contrasena, usuario.contrasena)) {
+      return usuario;
+    }
     return null;
   }
 
   Future<int> crear(Usuario usuario) async {
     final db = await DatabaseHelper().database;
-    return db.insert(_tabla, usuario.to_map());
+    final map = usuario.toMap();
+    map['contrasena'] = PasswordHasher.hash(usuario.contrasena);
+    return db.insert(_tabla, map);
   }
 }

@@ -8,6 +8,7 @@ import '../dao/presupuesto_dao.dart';
 import '../dao/reparacion_dao.dart';
 import '../dao/repuesto_dao.dart';
 import '../dao/entrega_dao.dart';
+import '../session/password_hasher.dart';
 
 import '../models/cliente.dart';
 import '../models/equipo.dart';
@@ -268,26 +269,28 @@ class DbLoader {
     debugPrint('📦 Entregas cargadas OK (${entregas.length})');
     debugPrint('✅ Carga de datos demo completada con éxito.');
 
-    // === 👤 USUARIOS DEMO ===
+    // === USUARIOS DEMO ===
     final db = await DatabaseHelper().database;
+    final hashedPassword = PasswordHasher.hash('1234');
+
     await db.insert('usuarios', {
       'nombre': 'Administrador Gontech',
       'correo': 'admin@gontech.cl',
-      'contrasena': '1234',
+      'contrasena': hashedPassword,
       'rol': 'admin',
     });
 
     await db.insert('usuarios', {
       'nombre': 'Técnico Demo',
       'correo': 'tecnico@gontech.cl',
-      'contrasena': '1234',
+      'contrasena': hashedPassword,
       'rol': 'tecnico',
     });
 
     await db.insert('usuarios', {
       'nombre': 'Cliente Demo',
       'correo': 'cliente@gontech.cl',
-      'contrasena': '1234',
+      'contrasena': hashedPassword,
       'rol': 'cliente',
     });
 

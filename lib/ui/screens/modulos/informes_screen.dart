@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/dao/informe_dao.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
+import '../../reports/pdf_informe.dart';
+import '../../reports/pdf_utils.dart';
 import 'informe_modal.dart';
 
 class InformesScreen extends StatefulWidget {
@@ -83,12 +85,17 @@ class _InformesScreenState extends State<InformesScreen> {
                             Icons.picture_as_pdf,
                             color: Colors.orangeAccent,
                           ),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Exportar PDF próximamente 📄'),
-                              ),
-                            );
+                          onPressed: () async {
+                            try {
+                              final file = await PdfInforme.generar(i);
+                              await PdfUtils.abrir(file);
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error al generar PDF: $e')),
+                                );
+                              }
+                            }
                           },
                         ),
                       ),

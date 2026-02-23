@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
@@ -21,7 +23,6 @@ class MenuLateral extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // 👤 Encabezado del usuario
           UserAccountsDrawerHeader(
             accountName: Text(
               nombre,
@@ -41,20 +42,14 @@ class MenuLateral extends StatelessWidget {
             ),
           ),
 
-          // 🧭 Secciones principales
           _item(context, Icons.dashboard_rounded, 'Inicio', '/home'),
           const Divider(color: Colors.white24, height: 8),
 
-          _seccionTitulo('Gestión Técnica'),
+          _seccionTitulo('Gestion Tecnica'),
           _item(context, Icons.group, 'Clientes', '/clientes'),
           _item(context, Icons.devices, 'Equipos', '/equipos'),
           _item(context, Icons.receipt_long, 'Ingresos', '/ingresos'),
-          _item(
-            context,
-            Icons.biotech_rounded,
-            'Diagnósticos',
-            '/diagnosticos',
-          ),
+          _item(context, Icons.biotech_rounded, 'Diagnosticos', '/diagnosticos'),
           _item(context, Icons.attach_money, 'Presupuestos', '/presupuestos'),
           _item(context, Icons.build, 'Reparaciones', '/reparaciones'),
           _item(context, Icons.inventory_2, 'Repuestos', '/repuestos'),
@@ -64,19 +59,18 @@ class MenuLateral extends StatelessWidget {
 
           _seccionTitulo('Reportes y Control'),
           _item(context, Icons.assignment, 'Informes', '/informes'),
-          _item(context, Icons.bar_chart, 'Estadísticas', '/estadisticas'),
+          _item(context, Icons.bar_chart, 'Estadisticas', '/estadisticas'),
 
           const Divider(color: Colors.white24, height: 8),
 
           _seccionTitulo('Sistema'),
           _item(context, Icons.settings, 'Ajustes', '/ajustes'),
-          _item(context, Icons.logout_rounded, 'Cerrar sesión', '/logout'),
+          _logoutItem(context),
         ],
       ),
     );
   }
 
-  // ---------- Ítem personalizado ----------
   Widget _item(
     BuildContext context,
     IconData icon,
@@ -92,10 +86,7 @@ class MenuLateral extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(10)),
         child: Row(
           children: [
             Icon(icon, color: Colors.tealAccent, size: 22),
@@ -116,7 +107,37 @@ class MenuLateral extends StatelessWidget {
     );
   }
 
-  // ---------- Subtítulo de sección ----------
+  Widget _logoutItem(BuildContext context) {
+    return InkWell(
+      onTap: () async {
+        Navigator.pop(context);
+        await context.read<AuthProvider>().logout();
+        if (context.mounted) {
+          Navigator.pushReplacementNamed(context, '/login');
+        }
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 22),
+            const SizedBox(width: 14),
+            const Text(
+              'Cerrar sesion',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _seccionTitulo(String texto) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),

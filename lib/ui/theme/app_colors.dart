@@ -5,5 +5,6 @@ class AppColors {
   static const Color fondo = Color(0xFF0E1116);
   static const Color acento = Color(0xFF40C8E0);
   static const Color texto = Colors.white;
+  // ignore: constant_identifier_names
   static const Color texto_suave = Color(0xFFB5BDC9);
 }

@@ -1,56 +1,32 @@
 import 'package:flutter/material.dart';
-import '../../core/session/session_manager.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/auth_provider.dart';
 import 'menu_lateral.dart';
 
-class LayoutPrincipal extends StatefulWidget {
+class LayoutPrincipal extends StatelessWidget {
   final Widget child;
   final String titulo;
-  final Widget? floatingActionButton; // 👈 Nuevo parámetro opcional
+  final Widget? floatingActionButton;
 
   const LayoutPrincipal({
     super.key,
     required this.child,
     required this.titulo,
-    this.floatingActionButton, // 👈 agregado
+    this.floatingActionButton,
   });
 
   @override
-  State<LayoutPrincipal> createState() => _LayoutPrincipalState();
-}
-
-class _LayoutPrincipalState extends State<LayoutPrincipal> {
-  final SessionManager _session = SessionManager();
-  String _correo = '';
-  String _nombre = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _cargarUsuario();
-  }
-
-  Future<void> _cargarUsuario() async {
-    final usuario = await _session.obtener_usuario();
-    setState(() {
-      _correo = usuario['correo'] ?? '';
-      _nombre = usuario['nombre'] ?? '';
-    });
-  }
-
-  void _navegar(String ruta) {
-    Navigator.pushReplacementNamed(context, ruta);
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.titulo),
+        title: Text(titulo),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             onPressed: () async {
-              await _session.cerrar_sesion();
+              await auth.logout();
               if (context.mounted) {
                 Navigator.pushReplacementNamed(context, '/login');
               }
@@ -58,9 +34,13 @@ class _LayoutPrincipalState extends State<LayoutPrincipal> {
           ),
         ],
       ),
-      drawer: MenuLateral(onSelect: _navegar, correo: _correo, nombre: _nombre),
-      body: widget.child,
-      floatingActionButton: widget.floatingActionButton, // 👈 agregado aquí
+      drawer: MenuLateral(
+        onSelect: (ruta) => Navigator.pushReplacementNamed(context, ruta),
+        correo: auth.correo,
+        nombre: auth.nombre,
+      ),
+      body: child,
+      floatingActionButton: floatingActionButton,
     );
   }
 }

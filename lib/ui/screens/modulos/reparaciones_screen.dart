@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/dao/reparacion_dao.dart';
+import '../../../core/dao/repuesto_dao.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
+import '../../reports/pdf_reparacion.dart';
+import '../../reports/pdf_utils.dart';
 
 class ReparacionesScreen extends StatefulWidget {
   const ReparacionesScreen({super.key});
@@ -383,19 +386,33 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                     color: Colors.cyanAccent,
                   ),
                   title: const Text(
-                    'Generar informe técnico (PDF)',
+                    'Generar reporte PDF',
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () async {
                     Navigator.pop(context);
-                    // 🔹 Lo implementaremos en el siguiente paso:
-                    // await generarInformeTecnico(r['id_reparacion']);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('📄 Generación de PDF próximamente...'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                    try {
+                      final repuestoDao = RepuestoDao();
+                      final repuestos = await repuestoDao.listarDetallado();
+                      final repuestosRep = repuestos.where(
+                        (rep) => rep['id_diagnostico'] == r['id_diagnostico'],
+                      ).toList();
+
+                      final file = await PdfReparacion.generar(
+                        reparacion: r,
+                        repuestos: repuestosRep,
+                      );
+                      await PdfUtils.abrir(file);
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error al generar PDF: $e'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
                   },
                 ),
                 const Divider(color: Colors.white12, indent: 16, endIndent: 16),

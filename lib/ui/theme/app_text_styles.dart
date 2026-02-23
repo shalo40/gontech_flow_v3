@@ -12,5 +12,9 @@ class AppTextStyles {
 
   static const etiqueta = TextStyle(fontSize: 13, color: AppColors.texto_suave);
 
-  static TextStyle? get tituloCard => null;
+  static const tituloCard = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    color: AppColors.texto,
+  );
 }

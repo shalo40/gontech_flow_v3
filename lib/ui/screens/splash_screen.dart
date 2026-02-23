@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/database/database_helper.dart';
-import '../../core/session/session_manager.dart';
+import '../../core/providers/auth_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -10,8 +11,6 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final SessionManager _session = SessionManager();
-
   @override
   void initState() {
     super.initState();
@@ -21,12 +20,17 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _init() async {
     await DatabaseHelper().database;
 
-    final logged = await _session.esta_autenticado();
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    await auth.checkSession();
 
     await Future.delayed(const Duration(milliseconds: 900));
 
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, logged ? '/home' : '/login');
+    Navigator.pushReplacementNamed(
+      context,
+      auth.isAuthenticated ? '/home' : '/login',
+    );
   }
 
   @override
@@ -37,16 +41,18 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Samsung style: centered logo
             Image.asset(
               'assets/images/logo.png',
               width: 110,
               height: 110,
               fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.build_circle,
+                size: 110,
+                color: Colors.tealAccent,
+              ),
             ),
-
             const SizedBox(height: 30),
-
             const CircularProgressIndicator(
               color: Colors.white54,
               strokeWidth: 2,
