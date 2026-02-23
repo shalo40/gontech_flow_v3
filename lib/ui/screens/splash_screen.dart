@@ -20,22 +20,37 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _init() async {
     await DatabaseHelper().database;
+
     final logged = await _session.esta_autenticado();
-    await Future.delayed(const Duration(milliseconds: 800));
+
+    await Future.delayed(const Duration(milliseconds: 900));
+
     if (!mounted) return;
     Navigator.pushReplacementNamed(context, logged ? '/home' : '/login');
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
+      backgroundColor: Colors.black,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            FlutterLogo(size: 96),
-            SizedBox(height: 20),
-            CircularProgressIndicator(),
+            // Samsung style: centered logo
+            Image.asset(
+              'assets/images/logo.png',
+              width: 110,
+              height: 110,
+              fit: BoxFit.contain,
+            ),
+
+            const SizedBox(height: 30),
+
+            const CircularProgressIndicator(
+              color: Colors.white54,
+              strokeWidth: 2,
+            ),
           ],
         ),
       ),

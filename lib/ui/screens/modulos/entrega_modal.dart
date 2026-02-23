@@ -79,7 +79,7 @@ Future<void> mostrarEntregaModal(BuildContext context) async {
                   // 🔽 Lista de reparaciones disponibles
                   DropdownButtonFormField<int>(
                     dropdownColor: const Color(0xFF2A2A3D),
-                    value: idSeleccionado,
+                    initialValue: idSeleccionado,
                     items: reparacionesListas.map<DropdownMenuItem<int>>((r) {
                       return DropdownMenuItem(
                         value: r['id_reparacion'] as int,
