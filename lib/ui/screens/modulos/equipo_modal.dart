@@ -178,7 +178,7 @@ Future<void> mostrarEquipoModal(
 
                     if (esEdicion) {
                       // Usamos id_equipo que es el identificador de tu modelo en Flutter
-                      await provider.actualizarEquipo(equipoExistente!.id_equipo!, equipoParaLaravel);
+                      await provider.actualizarEquipo(equipoExistente.id_equipo!, equipoParaLaravel);
                     } else {
                       await provider.agregarEquipo(equipoParaLaravel);
                     }
