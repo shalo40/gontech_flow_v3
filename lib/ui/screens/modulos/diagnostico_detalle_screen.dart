@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart'; // <-- Inyección del Provider
 import '../../../core/dao/diagnostico_dao.dart';
 import '../../../core/dao/ingreso_dao.dart';
 import '../../../core/dao/repuesto_dao.dart';
 import '../../../core/models/repuesto.dart';
+import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
 import '../../theme/app_colors.dart';
 import 'presupuesto_modal.dart';
 
@@ -20,7 +22,7 @@ class DiagnosticoDetalleScreen extends StatefulWidget {
 class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
   final _dao = DiagnosticoDao();
   final _ingresoDao = IngresoDAO();
-  final _repuestoDao = RepuestoDao();
+  final _repuestoDao = RepuestoDao(); // Mantenemos el DAO de repuestos hasta migrar ese módulo
 
   late Map<String, dynamic> _d;
   List<Repuesto> _repuestos = [];
@@ -35,11 +37,29 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
     _cargarRepuestos();
   }
 
+  // --- Buscador inteligente para API (Anidado) o Local (Plano) ---
+  String _getNested(String localKey, List<String> apiPath, [String fallback = '']) {
+    if (_d.containsKey(localKey) && _d[localKey] != null) {
+      return _d[localKey].toString();
+    }
+    dynamic current = _d;
+    for (final key in apiPath) {
+      if (current == null || current[key] == null) return fallback;
+      current = current[key];
+    }
+    return current.toString().isNotEmpty ? current.toString() : fallback;
+  }
+
+  int _getId() {
+    return int.tryParse((_d['id_diagnostico'] ?? _d['id'] ?? '0').toString()) ?? 0;
+  }
+  // ---------------------------------------------------------------
+
   Future<void> _cargarRepuestos() async {
     setState(() => _loadingRepuestos = true);
     try {
-      final data =
-          await _repuestoDao.listarPorDiagnostico(_d['id_diagnostico']);
+      final idDiag = _getId();
+      final data = await _repuestoDao.listarPorDiagnostico(idDiag);
       if (!mounted) return;
       setState(() {
         _repuestos = data.map((m) => Repuesto.fromMap(m)).toList();
@@ -102,8 +122,8 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
 
     String fechaStr = '';
     try {
-      fechaStr = DateFormat('dd/MM/yyyy HH:mm')
-          .format(DateTime.parse(_d['creado_en'] ?? ''));
+      final rawFecha = _d['creado_en'] ?? _d['created_at'] ?? '';
+      fechaStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(rawFecha));
     } catch (_) {
       fechaStr = 'Sin fecha';
     }
@@ -113,7 +133,7 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
       body: CustomScrollView(
         slivers: [
           _buildAppBar(estado, colorEst),
-          SliverToBoxAdapter(child: _buildStatusSection(estado, colorEst)),
+          SliverToBoxAdapter(child: _buildStatusSection(estado, colorEst, fechaStr)),
           SliverToBoxAdapter(child: _buildEquipoSection()),
           SliverToBoxAdapter(child: _buildFallaSection()),
           SliverToBoxAdapter(child: _buildPruebasSection()),
@@ -127,6 +147,10 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
   }
 
   Widget _buildAppBar(String estado, Color colorEst) {
+    final idDiag = _getId();
+    final tipo = _getNested('tipo_equipo', ['ingreso', 'equipo', 'tipo_equipo']);
+    final marca = _getNested('marca', ['ingreso', 'equipo', 'marca']);
+
     return SliverAppBar(
       expandedHeight: 180,
       pinned: true,
@@ -160,7 +184,7 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Diagnostico #${_d['id_diagnostico']}',
+                  'Diagnostico #$idDiag',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -168,7 +192,7 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
                   ),
                 ),
                 Text(
-                  '${_d['tipo_equipo'] ?? ''} ${_d['marca'] ?? ''}',
+                  '$tipo $marca',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.6),
                     fontSize: 14,
@@ -185,15 +209,7 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
   // ──────────────────────────────────────────
   // STATUS
   // ──────────────────────────────────────────
-  Widget _buildStatusSection(String estado, Color colorEst) {
-    String fechaStr = '';
-    try {
-      fechaStr = DateFormat('dd/MM/yyyy HH:mm')
-          .format(DateTime.parse(_d['creado_en'] ?? ''));
-    } catch (_) {
-      fechaStr = 'Sin fecha';
-    }
-
+  Widget _buildStatusSection(String estado, Color colorEst, String fechaStr) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Container(
@@ -264,6 +280,12 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
   // EQUIPO / CLIENTE
   // ──────────────────────────────────────────
   Widget _buildEquipoSection() {
+    final tipo = _getNested('tipo_equipo', ['ingreso', 'equipo', 'tipo_equipo']);
+    final marca = _getNested('marca', ['ingreso', 'equipo', 'marca']);
+    final modelo = _getNested('modelo', ['ingreso', 'equipo', 'modelo']);
+    final ns = _getNested('numero_serie', ['ingreso', 'equipo', 'numero_serie']);
+    final cliente = _getNested('nombre_cliente', ['ingreso', 'equipo', 'cliente', 'nombre'], 'Sin cliente');
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Column(
@@ -281,12 +303,10 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
             ),
             child: Column(
               children: [
-                _infoRow(Icons.devices, 'Equipo',
-                    '${_d['tipo_equipo'] ?? ''} ${_d['marca'] ?? ''} ${_d['modelo'] ?? ''}'),
-                if ((_d['numero_serie'] ?? '').toString().isNotEmpty)
-                  _infoRow(Icons.qr_code_2, 'N/S', _d['numero_serie']),
-                _infoRow(Icons.person_outline, 'Cliente',
-                    _d['nombre_cliente'] ?? 'Sin cliente'),
+                _infoRow(Icons.devices, 'Equipo', '$tipo $marca $modelo'),
+                if (ns.isNotEmpty)
+                  _infoRow(Icons.qr_code_2, 'N/S', ns),
+                _infoRow(Icons.person_outline, 'Cliente', cliente),
               ],
             ),
           ),
@@ -612,7 +632,7 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
                   () async {
                     await mostrarPresupuestoModal(
                       context,
-                      _d['id_diagnostico'],
+                      _getId(),
                     );
                     if (mounted) Navigator.pop(context);
                   },
@@ -623,9 +643,12 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
                   'Finalizar',
                   _colorModulo,
                   () async {
-                    await _dao.actualizarEstado(
-                        _d['id_diagnostico'], 'finalizado');
-                    if (mounted) Navigator.pop(context);
+                    await _dao.actualizarEstado(_getId(), 'finalizado');
+                    if (mounted) {
+                      // Recargamos el Provider globalmente
+                      await context.read<HelpdeskProvider>().recargarDiagnosticos();
+                      Navigator.pop(context);
+                    }
                   },
                 ),
               _actionButton(
@@ -633,8 +656,12 @@ class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
                 'Eliminar',
                 Colors.redAccent,
                 () async {
-                  await _dao.eliminar(_d['id_diagnostico']);
-                  if (mounted) Navigator.pop(context);
+                  await _dao.eliminar(_getId());
+                  if (mounted) {
+                    // Recargamos el Provider globalmente
+                    await context.read<HelpdeskProvider>().recargarDiagnosticos();
+                    Navigator.pop(context);
+                  }
                 },
               ),
             ],

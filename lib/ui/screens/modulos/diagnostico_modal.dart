@@ -1,9 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../../core/models/diagnostico.dart';
-import '../../../core/dao/diagnostico_dao.dart';
-import '../../../core/dao/ingreso_dao.dart';
+import 'package:provider/provider.dart'; // <-- Inyección del Provider
 import '../../../core/dao/repuesto_dao.dart';
 import '../../../core/models/repuesto.dart';
+import '../../../core/providers/helpdesk_provider.dart'; // <-- Cerebro unificado
 import '../../theme/app_colors.dart';
 import 'repuesto_modal.dart';
 
@@ -11,8 +11,6 @@ Future<void> mostrarDiagnosticoModal(
   BuildContext context,
   int idIngreso,
 ) async {
-  final dao = DiagnosticoDao();
-  final ingresoDao = IngresoDAO();
   final repuestoDao = RepuestoDao();
 
   final fallaCtrl = TextEditingController();
@@ -34,7 +32,7 @@ Future<void> mostrarDiagnosticoModal(
     'Chequeo periféricos y conectores',
   ];
 
-  // 👨‍🔧 Técnicos (más adelante viene de usuarios)
+  // 👨‍🔧 Técnicos
   final List<String> tecnicos = [
     'Gonzalo Castillo',
     'Michelle Rivera',
@@ -43,12 +41,6 @@ Future<void> mostrarDiagnosticoModal(
   ];
 
   int pasoActual = 0;
-  List<Repuesto> repuestos = [];
-
-  Future<void> cargarRepuestos() async {
-    final data = await repuestoDao.listarPorDiagnostico(idIngreso);
-    repuestos = data.cast<Repuesto>();
-  }
 
   await showDialog(
     context: context,
@@ -208,20 +200,13 @@ Future<void> mostrarDiagnosticoModal(
                                     idReferencia: idIngreso,
                                     origen: 'diagnostico',
                                   );
-                                  await cargarRepuestos();
                                   setState(() {});
                                 },
                               ),
                             ],
                           ),
-                          FutureBuilder<List<Repuesto>>(
-                            future: repuestoDao
-                                .listarPorDiagnostico(idIngreso)
-                                .then(
-                                  (data) => data
-                                      .map((m) => Repuesto.fromMap(m))
-                                      .toList(),
-                                ),
+                          FutureBuilder<List<dynamic>>(
+                            future: repuestoDao.listarPorDiagnostico(idIngreso),
                             builder: (context, snapshot) {
                               if (!snapshot.hasData || snapshot.data!.isEmpty) {
                                 return const Text(
@@ -230,9 +215,10 @@ Future<void> mostrarDiagnosticoModal(
                                 );
                               }
 
-                              final repuestos = snapshot.data!;
+                              final items = snapshot.data!;
                               return Column(
-                                children: repuestos.map((r) {
+                                children: items.map((m) {
+                                  final r = Repuesto.fromMap(m);
                                   return ListTile(
                                     dense: true,
                                     leading: const Icon(
@@ -241,15 +227,11 @@ Future<void> mostrarDiagnosticoModal(
                                     ),
                                     title: Text(
                                       r.nombre ?? '',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                      ),
+                                      style: const TextStyle(color: Colors.white),
                                     ),
                                     subtitle: Text(
                                       'Cantidad: ${r.cantidad} | Estado: ${r.estado}',
-                                      style: const TextStyle(
-                                        color: Colors.white54,
-                                      ),
+                                      style: const TextStyle(color: Colors.white54),
                                     ),
                                   );
                                 }).toList(),
@@ -276,14 +258,12 @@ Future<void> mostrarDiagnosticoModal(
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            initialValue: tecnicoSeleccionado,
+                            value: tecnicoSeleccionado,
                             dropdownColor: AppColors.fondo,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'Técnico responsable',
-                              labelStyle: const TextStyle(
-                                color: Colors.white70,
-                              ),
+                              labelStyle: const TextStyle(color: Colors.white70),
                               prefixIcon: const Icon(
                                 Icons.engineering,
                                 color: Colors.tealAccent,
@@ -292,9 +272,7 @@ Future<void> mostrarDiagnosticoModal(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               focusedBorder: const OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Colors.tealAccent,
-                                ),
+                                borderSide: BorderSide(color: Colors.tealAccent),
                               ),
                             ),
                             items: tecnicos.map((t) {
@@ -326,43 +304,38 @@ Future<void> mostrarDiagnosticoModal(
                   foregroundColor: Colors.tealAccent,
                 ),
                 onPressed: () async {
-                  if (fallaCtrl.text.isEmpty ||
+                  if (fallaCtrl.text.trim().isEmpty ||
                       tecnicoSeleccionado == null ||
                       pruebasSeleccionadas.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text(
-                          'Completa los campos requeridos antes de guardar',
-                        ),
+                        content: Text('Completa los campos requeridos antes de guardar'),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
                     return;
                   }
 
-                  final diagnostico = Diagnostico(
-                    id_ingreso: idIngreso,
-                    descripcion_falla: fallaCtrl.text,
-                    pruebas_realizadas: pruebasSeleccionadas.join(', '),
-                    conclusiones: conclusionesCtrl.text,
-                    id_tecnico: 1,
-                    estado: 'diagnosticado',
-                  );
+                  // Estructuramos el mapa con la nomenclatura exacta de Laravel/HeidiSQL
+                  final diagnosticoParaLaravel = {
+                    'ingreso_id': idIngreso,
+                    'tecnico_id': 1, // Forzado temporalmente hasta acoplar Auth completo
+                    'descripcion_falla': fallaCtrl.text.trim(),
+                    'pruebas_realizadas': pruebasSeleccionadas.join(', '),
+                    'conclusiones': conclusionesCtrl.text.trim(),
+                    'estado': 'diagnosticado',
+                    'creado_en': DateTime.now().toIso8601String(),
+                  };
 
                   try {
-                    await dao.insertar(diagnostico);
-                    await ingresoDao.actualizarEstadoDesdeDiagnostico(
-                      idIngreso,
-                      'diagnosticado',
-                    );
+                    final provider = context.read<HelpdeskProvider>();
+                    final exito = await provider.agregarDiagnostico(diagnosticoParaLaravel);
 
-                    if (context.mounted) {
+                    if (exito && context.mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text(
-                            '✅ Diagnóstico registrado exitosamente',
-                          ),
+                          content: Text('✅ Diagnóstico registrado exitosamente'),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );

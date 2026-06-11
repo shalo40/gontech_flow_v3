@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gontech_flow_v2/core/models/diagnostico.dart';
 import 'package:gontech_flow_v2/core/models/ingreso.dart';
 import '../config/api_config.dart';
 import '../dao/cliente_dao.dart';
@@ -14,6 +15,7 @@ import '../services/remote_dashboard_service.dart';
 import '../services/remote_cliente_service.dart';
 import '../services/remote_equipo_service.dart';
 import '../services/remote_ingreso_service.dart';
+import '../services/remote_diagnostico_service.dart'; // <-- Importación del nuevo servicio remotos
 import '../models/cliente.dart';
 
 class HelpdeskProvider extends ChangeNotifier {
@@ -31,6 +33,7 @@ class HelpdeskProvider extends ChangeNotifier {
   final RemoteClienteService _remoteCliente = RemoteClienteService();
   final RemoteEquipoService _remoteEquipo = RemoteEquipoService();
   final RemoteIngresoService _remoteIngreso = RemoteIngresoService();
+  final RemoteDiagnosticoService _remoteDiagnostico = RemoteDiagnosticoService(); // <-- Instancia del servicio
 
   Map<String, int> resumen = {
     'Clientes': 0, 'Equipos': 0, 'Ingresos': 0, 'Diagnósticos': 0, 'Presupuestos': 0, 'Reparaciones': 0,
@@ -181,13 +184,43 @@ class HelpdeskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- MÉTODOS DE RECARGA RESTANTES ---
+  // --- CRUD DIAGNÓSTICOS ---
+  Future<bool> agregarDiagnostico(Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteDiagnostico.crearDiagnostico(data);
+        if (res != null) { await recargarDiagnosticos(); return true; }
+        return false;
+      }
+      final id = await _diagnosticoDao.insertar(data as Diagnostico);
+      if (id > 0) { await recargarDiagnosticos(); return true; }
+      return false;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> recargarDiagnosticos() async {
-    _diagnosticos = await _diagnosticoDao.listarDetallado();
+    if (await ApiConfig.useApiMode()) {
+      try {
+        final data = await _remoteDiagnostico.obtenerDiagnosticos();
+        _diagnosticos = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (e) {
+        print('Error recargando diagnósticos desde API: $e');
+      }
+    } else {
+      _diagnosticos = await _diagnosticoDao.listarDetallado();
+    }
     resumen['Diagnósticos'] = _diagnosticos.length;
     notifyListeners();
   }
 
+  // --- MÉTODOS DE RECARGA RESTANTES ---
   Future<void> recargarPresupuestos() async {
     _presupuestos = await _presupuestoDao.listarDetallado();
     resumen['Presupuestos'] = _presupuestos.length;
