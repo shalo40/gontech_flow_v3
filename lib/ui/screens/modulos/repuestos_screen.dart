@@ -5,7 +5,9 @@ import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
 
 class RepuestosScreen extends StatefulWidget {
-  const RepuestosScreen({super.key});
+  final int? idDiagnosticoFiltro;
+  
+  const RepuestosScreen({super.key, this.idDiagnosticoFiltro});
 
   @override
   State<RepuestosScreen> createState() => _RepuestosScreenState();
@@ -28,7 +30,13 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
 
   Future<void> cargar() async {
     final data = await dao.listarDetallado();
-    setState(() => repuestos = data);
+    
+    if (widget.idDiagnosticoFiltro != null) {
+      final filtrados = data.where((r) => r['id_diagnostico'] == widget.idDiagnosticoFiltro).toList();
+      setState(() => repuestos = filtrados);
+    } else {
+      setState(() => repuestos = data);
+    }
   }
 
   Color _colorEstado(String estado) {
@@ -140,6 +148,38 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
               ],
             ),
             const SizedBox(height: 8),
+
+            if (widget.idDiagnosticoFiltro != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primario.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primario),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.filter_alt, color: AppColors.primario),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Mostrando repuestos vinculados a la reparación (Diag: #${widget.idDiagnosticoFiltro})',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white70),
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RepuestosScreen()),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
 
             // 🟩 Filtros de estado
             SingleChildScrollView(

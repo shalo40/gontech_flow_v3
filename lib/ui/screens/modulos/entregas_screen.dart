@@ -185,7 +185,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
                               ),
                               title: Text(
                                 e['nombre_receptor'] ?? '-',
-                                style: AppTextStyles.tituloCard?.copyWith(
+                                style: AppTextStyles.tituloCard.copyWith(
                                   fontSize: 16,
                                 ),
                               ),

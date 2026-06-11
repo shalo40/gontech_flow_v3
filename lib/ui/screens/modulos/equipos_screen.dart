@@ -2,11 +2,12 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart'; // <-- Inyectamos Provider
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '../../../core/dao/equipo_dao.dart';
+import '../../../core/providers/helpdesk_provider.dart'; // <-- Importamos tu Provider
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
 
@@ -18,21 +19,43 @@ class EquiposScreen extends StatefulWidget {
 }
 
 class _EquiposScreenState extends State<EquiposScreen> {
-  final equipoDao = EquipoDao();
-  List<Map<String, dynamic>> equipos = [];
   String filtroTexto = '';
   String filtroEstado = 'todos';
 
   @override
   void initState() {
     super.initState();
-    cargar();
+    // Llamada segura al provider después de construir la vista
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargar();
+    });
   }
 
-  Future<void> cargar() async {
-    final data = await equipoDao.listarDetallado();
-    setState(() => equipos = data);
+  Future<void> _cargar() async {
+    final provider = context.read<HelpdeskProvider>();
+    await provider.recargarEquipos();
   }
+
+  // --- Helpers de compatibilidad API / Local ---
+  String _getNombreCliente(Map<String, dynamic> e) {
+    if (e.containsKey('nombre_cliente') && e['nombre_cliente'] != null) {
+      return e['nombre_cliente'];
+    }
+    if (e.containsKey('cliente') && e['cliente'] != null) {
+      return e['cliente']['nombre'] ?? 'Sin cliente';
+    }
+    return 'Sin cliente';
+  }
+
+  String _getIdEquipo(Map<String, dynamic> e) {
+    return (e['id_equipo'] ?? e['id'] ?? '').toString();
+  }
+
+  String _getFecha(Map<String, dynamic> e) {
+    final f = e['fecha_ingreso'] ?? e['created_at'] ?? 'Sin fecha';
+    return f.toString().split('T').first;
+  }
+  // ---------------------------------------------
 
   Color _colorEstado(String? estado) {
     switch (estado) {
@@ -79,21 +102,29 @@ class _EquiposScreenState extends State<EquiposScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Escuchamos el estado desde el Provider
+    final provider = context.watch<HelpdeskProvider>();
+    final equipos = provider.equipos;
+    final isLoading = provider.loading;
+
     final equiposFiltrados = equipos.where((e) {
       final texto = filtroTexto.toLowerCase();
+      final nombreCliente = _getNombreCliente(e).toLowerCase();
+      
       final coincideTexto =
-          e['nombre_cliente'].toString().toLowerCase().contains(texto) ||
-          e['marca'].toString().toLowerCase().contains(texto) ||
-          e['tipo_equipo'].toString().toLowerCase().contains(texto);
-      final coincideEstado =
-          filtroEstado == 'todos' ||
-          (e['estado'] ?? 'pendiente') == filtroEstado;
+          nombreCliente.contains(texto) ||
+          (e['marca']?.toString().toLowerCase().contains(texto) ?? false) ||
+          (e['tipo_equipo']?.toString().toLowerCase().contains(texto) ?? false);
+          
+      final estadoActual = e['estado'] ?? 'pendiente';
+      final coincideEstado = filtroEstado == 'todos' || estadoActual == filtroEstado;
+      
       return coincideTexto && coincideEstado;
     }).toList();
 
     final agrupados = <String, List<Map<String, dynamic>>>{};
     for (final e in equiposFiltrados) {
-      final fecha = (e['fecha_ingreso'] ?? 'Sin fecha').split('T').first;
+      final fecha = _getFecha(e);
       agrupados.putIfAbsent(fecha, () => []).add(e);
     }
 
@@ -139,38 +170,40 @@ class _EquiposScreenState extends State<EquiposScreen> {
           // 📋 Lista agrupada
           Expanded(
             child: RefreshIndicator(
-              onRefresh: cargar,
+              onRefresh: _cargar,
               color: Colors.tealAccent,
-              child: equiposFiltrados.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No hay equipos registrados.',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    )
-                  : ListView(
-                      children: agrupados.entries.map((grupo) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              child: Text(
-                                '📅 ${grupo.key}',
-                                style: const TextStyle(
-                                  color: Colors.tealAccent,
-                                  fontWeight: FontWeight.bold,
+              child: isLoading && equiposFiltrados.isEmpty
+                  ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+                  : equiposFiltrados.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No hay equipos registrados.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        )
+                      : ListView(
+                          children: agrupados.entries.map((grupo) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  child: Text(
+                                    '📅 ${grupo.key}',
+                                    style: const TextStyle(
+                                      color: Colors.tealAccent,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            ...grupo.value.map((e) => _cardEquipo(context, e)),
-                          ],
-                        );
-                      }).toList(),
-                    ),
+                                ...grupo.value.map((e) => _cardEquipo(context, e)),
+                              ],
+                            );
+                          }).toList(),
+                        ),
             ),
           ),
         ],
@@ -205,13 +238,14 @@ class _EquiposScreenState extends State<EquiposScreen> {
 
   Widget _cardEquipo(BuildContext context, Map<String, dynamic> e) {
     final estado = e['estado'] ?? 'pendiente';
+    final nombreCliente = _getNombreCliente(e);
 
     return Card(
       color: AppColors.fondo.withOpacity(0.9),
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ListTile(
-        onTap: () => _mostrarDetalles(context, e),
+        onTap: () => _mostrarDetalles(context, e, nombreCliente),
         leading: CircleAvatar(
           backgroundColor: Colors.tealAccent.withOpacity(0.15),
           backgroundImage:
@@ -232,7 +266,7 @@ class _EquiposScreenState extends State<EquiposScreen> {
           ),
         ),
         subtitle: Text(
-          'Cliente: ${e['nombre_cliente'] ?? 'N/D'}\n'
+          'Cliente: $nombreCliente\n'
           'Serie: ${e['numero_serie'] ?? '-'}',
           style: const TextStyle(color: Colors.white70, height: 1.3),
         ),
@@ -253,8 +287,10 @@ class _EquiposScreenState extends State<EquiposScreen> {
   Future<void> _mostrarDetalles(
     BuildContext context,
     Map<String, dynamic> equipo,
+    String nombreCliente,
   ) async {
     final estado = equipo['estado'] ?? 'pendiente';
+    final idReal = _getIdEquipo(equipo);
 
     await showDialog(
       context: context,
@@ -290,7 +326,7 @@ class _EquiposScreenState extends State<EquiposScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    equipo['nombre_cliente'] ?? 'Sin cliente',
+                    nombreCliente,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
@@ -329,8 +365,7 @@ class _EquiposScreenState extends State<EquiposScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: QrImageView(
-                      data:
-                          'EQUIPO-${equipo['id_equipo']}-${equipo['numero_serie'] ?? ''}',
+                      data: 'EQUIPO-$idReal-${equipo['numero_serie'] ?? ''}',
                       size: 160,
                       backgroundColor: Colors.white,
                     ),
@@ -343,7 +378,7 @@ class _EquiposScreenState extends State<EquiposScreen> {
                   const SizedBox(height: 16),
 
                   // Detalles técnicos
-                  _detalleItem('ID Equipo', equipo['id_equipo'].toString()),
+                  _detalleItem('ID Equipo', idReal),
                   _detalleItem('Número de serie', equipo['numero_serie']),
                   _detalleItem('Tipo', equipo['tipo_equipo']),
                   _detalleItem('Marca', equipo['marca']),
@@ -361,9 +396,9 @@ class _EquiposScreenState extends State<EquiposScreen> {
                         onPressed: () async {
                           await _imprimirQR(
                             context,
-                            equipo['id_equipo'].toString(),
-                            equipo['numero_serie'] ?? '',
-                            equipo['nombre_cliente'] ?? '',
+                            equipo,
+                            idReal,
+                            nombreCliente,
                           );
                         },
                         icon: const Icon(Icons.print, color: Colors.black),
@@ -379,7 +414,8 @@ class _EquiposScreenState extends State<EquiposScreen> {
                           Navigator.pushNamed(
                             context,
                             '/ingresos',
-                            arguments: equipo['id_equipo'],
+                            // Usamos parseInt de forma segura si la ID viene como String desde Laravel
+                            arguments: int.tryParse(idReal) ?? 0,
                           );
                         },
                         icon: const Icon(Icons.receipt_long),
@@ -436,16 +472,18 @@ class _EquiposScreenState extends State<EquiposScreen> {
   // ===========================
   Future<void> _imprimirQR(
     BuildContext context,
+    Map<String, dynamic> equipo,
     String idEquipo,
-    String numeroSerie,
     String cliente,
   ) async {
     try {
       final pdf = pw.Document();
 
-      // Logo Gontech Solutions
+      // Logo
       final logo = await rootBundle.load('lib/ui/assets/images/logo.png');
       final logoBytes = logo.buffer.asUint8List();
+
+      final numeroSerie = equipo['numero_serie'] ?? '';
 
       // Generar el QR
       final qrImage = await QrPainter(
@@ -456,6 +494,9 @@ class _EquiposScreenState extends State<EquiposScreen> {
       ).toImageData(400, format: ImageByteFormat.png);
 
       final imageBytes = qrImage!.buffer.asUint8List();
+
+      // ¡Texto de la etiqueta dinámico!
+      final tituloEquipo = '${equipo['tipo_equipo'] ?? ''} ${equipo['marca'] ?? ''} ${equipo['modelo'] ?? ''}'.trim();
 
       // Etiqueta profesional (80x50 mm)
       pdf.addPage(
@@ -491,10 +532,10 @@ class _EquiposScreenState extends State<EquiposScreen> {
 
                   pw.Divider(color: PdfColors.grey400, thickness: 0.3),
 
-                  // Info del equipo
+                  // Info del equipo dinámica
                   pw.SizedBox(height: 3),
                   pw.Text(
-                    'All-in-One HP Pavilion 24',
+                    tituloEquipo.isEmpty ? 'Equipo sin especificar' : tituloEquipo,
                     style: pw.TextStyle(
                       fontSize: 8.5,
                       fontWeight: pw.FontWeight.bold,
@@ -502,7 +543,7 @@ class _EquiposScreenState extends State<EquiposScreen> {
                     textAlign: pw.TextAlign.center,
                   ),
                   pw.Text(
-                    'Serie: $numeroSerie   ID: #$idEquipo',
+                    'Serie: ${numeroSerie.isEmpty ? '-' : numeroSerie}   ID: #$idEquipo',
                     style: pw.TextStyle(fontSize: 7.5),
                   ),
                   pw.SizedBox(height: 4),
@@ -532,20 +573,24 @@ class _EquiposScreenState extends State<EquiposScreen> {
       final file = File('${downloadsDir.path}/Etiqueta_Equipo_$idEquipo.pdf');
       await file.writeAsBytes(await pdf.save());
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ PDF guardado en Descargas: ${file.path}'),
-          backgroundColor: Colors.tealAccent,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      if(context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ PDF guardado en Descargas: ${file.path}'),
+            backgroundColor: Colors.tealAccent,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al generar el QR: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      if(context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al generar el QR: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 }

@@ -14,20 +14,40 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // Ajustados para que coincidan con el DatabaseSeeder de Laravel
   final TextEditingController correoCtrl = TextEditingController(
-    text: 'admin@gontech.cl',
+    text: 'admin@gontechsolutions.cl', 
   );
-  final TextEditingController passCtrl = TextEditingController(text: '1234');
+  final TextEditingController passCtrl = TextEditingController(text: '12345678');
 
   Future<void> _intentarLogin() async {
     final auth = context.read<AuthProvider>();
-    final ok = await auth.login(correoCtrl.text, passCtrl.text);
-    if (!mounted) return;
-    if (ok) {
-      Navigator.pushReplacementNamed(context, '/home');
-    } else {
+    
+    try {
+      // Intentamos el login. Si Laravel tira error (ej. 401 o 422), saltará al catch
+      final ok = await auth.login(correoCtrl.text, passCtrl.text);
+      if (!mounted) return;
+      
+      if (ok) {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        // Este fallback queda por si falla en modo local (SQLite)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Credenciales inválidas'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      // Aquí atrapamos el error limpio que escupe Laravel y lo mostramos en el SnackBar
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Credenciales invalidas')),
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating, // Le da un mejor look visual
+        ),
       );
     }
   }
@@ -66,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               const SizedBox(height: 16),
                               CustomTextField(
                                 controller: passCtrl,
-                                etiqueta: 'Contrasena',
+                                etiqueta: 'Contraseña',
                                 esContrasena: true,
                               ),
                               const SizedBox(height: 24),

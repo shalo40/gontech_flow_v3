@@ -6,6 +6,10 @@ import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
 import '../../reports/pdf_reparacion.dart';
 import '../../reports/pdf_utils.dart';
+import 'repuestos_screen.dart';
+import '../../../core/dao/entrega_dao.dart';
+import '../../../core/dao/ingreso_dao.dart';
+import '../../../core/models/entrega.dart';
 
 class ReparacionesScreen extends StatefulWidget {
   const ReparacionesScreen({super.key});
@@ -17,6 +21,7 @@ class ReparacionesScreen extends StatefulWidget {
 class _ReparacionesScreenState extends State<ReparacionesScreen> {
   final dao = ReparacionDao();
   List<Map<String, dynamic>> reparaciones = [];
+  List<Map<String, dynamic>> _repuestosGlobal = [];
   String filtroEstado = 'todos';
   String criterioOrden = 'reciente';
   String busqueda = '';
@@ -30,7 +35,12 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
 
   Future<void> cargar() async {
     final data = await dao.listarDetallado();
-    setState(() => reparaciones = data);
+    final repDao = RepuestoDao();
+    final repData = await repDao.listarDetallado();
+    setState(() {
+      reparaciones = data;
+      _repuestosGlobal = repData;
+    });
   }
 
   Color _colorEstado(String estado) {
@@ -216,6 +226,10 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
         ? formatoFecha.format(DateTime.parse(r['fecha_fin']))
         : '-';
 
+    final repuestosRelacionados = _repuestosGlobal.where((rep) => rep['id_diagnostico'] == r['id_diagnostico']).toList();
+    final int countRepuestos = repuestosRelacionados.length;
+    final double costoRepuestos = repuestosRelacionados.fold(0.0, (sum, rep) => sum + (rep['costo'] as num? ?? 0).toDouble());
+
     return ExpansionTile(
       collapsedBackgroundColor: AppColors.fondo.withOpacity(0.9),
       backgroundColor: AppColors.fondo.withOpacity(0.95),
@@ -268,6 +282,28 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                 'Fin: $fechaFin',
                 style: const TextStyle(color: Colors.white54),
               ),
+              if (countRepuestos > 0) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.cyanAccent.withValues(alpha: 0.1),
+                    border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.5)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.build_circle, color: Colors.cyanAccent, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$countRepuestos Repuesto(s) usados - \$${costoRepuestos.toStringAsFixed(0)}',
+                        style: const TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -276,6 +312,7 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
   }
 
   Future<void> _mostrarOpciones(Map<String, dynamic> r) async {
+    final estado = r['estado'] ?? 'pendiente';
     showModalBottomSheet(
       backgroundColor: AppColors.fondo.withOpacity(0.97),
       shape: const RoundedRectangleBorder(
@@ -317,6 +354,31 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                       context,
                       '/reparacion_detalle',
                       arguments: r,
+                    );
+                  },
+                ),
+                const Divider(color: Colors.white12, indent: 16, endIndent: 16),
+
+                ListTile(
+                  leading: const Icon(
+                    Icons.inventory,
+                    color: Colors.blueAccent,
+                  ),
+                  title: const Text(
+                    'Ver repuestos usados',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  subtitle: const Text(
+                    'Ir al inventario filtrando por esta reparación',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RepuestosScreen(idDiagnosticoFiltro: r['id_diagnostico']),
+                      ),
                     );
                   },
                 ),
@@ -379,6 +441,53 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                   },
                 ),
                 const Divider(color: Colors.white12, indent: 16, endIndent: 16),
+
+                if (estado == 'finalizada') ...[
+                  ListTile(
+                    leading: const Icon(
+                      Icons.rocket_launch,
+                      color: Colors.purpleAccent,
+                    ),
+                    title: const Text(
+                      'Liberar para Entrega (Alta manual)',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Mueve el equipo a la lista de Entregas pendientes',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      // TODO: Integrar verificación de pagos en el futuro
+                      
+                      final entregaDao = EntregaDao();
+                      final ingresoDao = IngresoDAO();
+                      
+                      final nuevaEntrega = Entrega(
+                        id_reparacion: r['id_reparacion'],
+                        nombre_receptor: r['cliente'],
+                        estado: 'pendiente',
+                      );
+                      
+                      await entregaDao.insertar(nuevaEntrega);
+                      await dao.actualizarEstado(r['id_reparacion'], 'entregada');
+                      await ingresoDao.actualizarEstadoDesdeReparacion(r['id_ingreso'] ?? 0, 'finalizado');
+                      
+                      await cargar();
+                      
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('🚀 Equipo liberado y enviado a Entregas'),
+                            backgroundColor: Colors.purple,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  const Divider(color: Colors.white12, indent: 16, endIndent: 16),
+                ],
 
                 ListTile(
                   leading: const Icon(

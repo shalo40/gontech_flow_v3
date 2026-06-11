@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "cl.gontech.flow"
+    namespace = "com.example.gontech_flow_v2"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,7 +23,7 @@ android {
         applicationId = "cl.gontech.flow"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

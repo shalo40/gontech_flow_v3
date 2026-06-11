@@ -45,11 +45,25 @@ class ReparacionDao {
     int idDiagnostico,
   ) async {
     final db = await dbProvider.database;
+    
+    // Buscar la descripción real del presupuesto
+    final presupuestoMaps = await db.query(
+      'presupuestos',
+      columns: ['descripcion'],
+      where: 'id_presupuesto = ?',
+      whereArgs: [idPresupuesto],
+      limit: 1,
+    );
+    
+    String descripcionReal = 'Reparación generada desde presupuesto.';
+    if (presupuestoMaps.isNotEmpty) {
+      descripcionReal = presupuestoMaps.first['descripcion'] as String? ?? descripcionReal;
+    }
+
     await db.insert('reparaciones', {
       'id_presupuesto': idPresupuesto,
       'id_diagnostico': idDiagnostico,
-      'descripcion':
-          'Reparación generada automáticamente al autorizar el presupuesto.',
+      'descripcion': descripcionReal,
       'fecha_inicio': DateTime.now().toIso8601String(),
       'estado': 'en_proceso',
     });

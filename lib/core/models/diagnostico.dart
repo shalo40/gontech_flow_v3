@@ -1,3 +1,6 @@
+// ignore_for_file: non_constant_identifier_names
+// ignore_for_file: non_constant_identifier_names
+
 class Diagnostico {
   int? id_diagnostico;
   int id_ingreso;

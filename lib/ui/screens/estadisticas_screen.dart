@@ -92,7 +92,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                   _seccionTitulo('Financiero'),
                   _tarjetaFinanciera(
                     'Ingresos autorizados',
-                    formatoPesos.format(provider.ingresosTotalesPresupuestos),
+                    formatoPesos.format(provider.resumen['Ingresos'] ?? 0),
                     Icons.monetization_on,
                     Colors.tealAccent,
                   ),

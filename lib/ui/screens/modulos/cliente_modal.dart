@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // <-- Inyectamos Provider
 import 'package:image_picker/image_picker.dart' as img_picker;
 import '../../../core/dao/cliente_dao.dart';
 import '../../../core/models/cliente.dart';
+import '../../../core/providers/helpdesk_provider.dart'; // <-- Importamos tu Provider
 import '../../theme/app_colors.dart';
 
 Future<void> mostrarClienteModal(
@@ -10,7 +12,6 @@ Future<void> mostrarClienteModal(
   Cliente? clienteExistente,
   required VoidCallback onGuardado,
 }) async {
-  final dao = ClienteDao();
   final picker = img_picker.ImagePicker();
 
   final nombreCtrl = TextEditingController(
@@ -109,9 +110,17 @@ Future<void> mostrarClienteModal(
 
             try {
               if (esEdicion) {
+                // TODO: Conectar edición con la API más adelante
+                final dao = ClienteDao();
                 await dao.actualizar(nuevo);
+                if (context.mounted) {
+                  await context.read<HelpdeskProvider>().recargarClientes();
+                }
               } else {
-                await dao.insertar(nuevo);
+                // ¡AQUÍ ESTÁ LA CONEXIÓN AL BACKEND!
+                // Lee el provider y ejecuta la lógica que creamos (API o Local)
+                final provider = context.read<HelpdeskProvider>();
+                await provider.agregarCliente(nuevo);
               }
 
               if (context.mounted) {
@@ -133,7 +142,8 @@ Future<void> mostrarClienteModal(
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('❌ Error al guardar cliente: $e'),
+                    content: Text('❌ Error: $e'),
+                    backgroundColor: Colors.redAccent,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );

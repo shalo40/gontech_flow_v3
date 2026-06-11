@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../../core/dao/cliente_dao.dart';
+import 'package:provider/provider.dart';
 import '../../../core/models/cliente.dart';
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
 import 'cliente_modal.dart';
@@ -15,36 +16,42 @@ class ClientesScreen extends StatefulWidget {
 }
 
 class _ClientesScreenState extends State<ClientesScreen> {
-  final dao = ClienteDao();
   final buscadorCtrl = TextEditingController();
-
-  List<Cliente> _clientes = [];
   List<Cliente> _filtrados = [];
 
   @override
   void initState() {
     super.initState();
-    _cargar();
+    // Usamos addPostFrameCallback para llamar al provider de forma segura después de renderizar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargar();
+    });
   }
 
   Future<void> _cargar() async {
-    final data = await dao.listar();
-    data.sort((a, b) => a.nombre.compareTo(b.nombre));
-    if (!mounted) return;
-    setState(() {
-      _clientes = data;
-      _filtrados = data;
-    });
+    final provider = context.read<HelpdeskProvider>();
+    
+    // Le pedimos al provider que actualice la lista (desde Laravel o Local)
+    await provider.recargarClientes();
+    
+    // Aplicamos el filtro actual (o mostramos todos si el buscador está vacío)
+    _filtrar(buscadorCtrl.text);
   }
 
   void _filtrar(String q) {
     final query = q.trim().toLowerCase();
+    final provider = context.read<HelpdeskProvider>();
+    
     setState(() {
-      _filtrados = _clientes.where((c) {
+      // Filtramos directamente desde la lista oficial del provider
+      _filtrados = provider.clientes.where((c) {
         return c.nombre.toLowerCase().contains(query) ||
             c.correo.toLowerCase().contains(query) ||
             c.telefono.toLowerCase().contains(query);
       }).toList();
+      
+      // Ordenamos alfabéticamente
+      _filtrados.sort((a, b) => a.nombre.compareTo(b.nombre));
     });
   }
 
@@ -88,12 +95,32 @@ class _ClientesScreenState extends State<ClientesScreen> {
     );
 
     if (ok == true) {
-      await dao.eliminar(c.idCliente!);
-      await _cargar();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cliente eliminado correctamente')),
-        );
+      try {
+        final provider = context.read<HelpdeskProvider>();
+        // Llamamos al Provider para que elimine en API o Local
+        await provider.eliminarCliente(c.idCliente!);
+        
+        // Actualizamos visualmente el buscador/lista
+        _filtrar(buscadorCtrl.text);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cliente eliminado correctamente ✅'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     }
   }
@@ -101,6 +128,8 @@ class _ClientesScreenState extends State<ClientesScreen> {
   @override
   Widget build(BuildContext context) {
     final grupos = _agruparPorLetra(_filtrados);
+    // Escuchamos el estado de carga del provider
+    final isLoading = context.watch<HelpdeskProvider>().loading;
 
     return LayoutPrincipal(
       titulo: 'Clientes',
@@ -141,38 +170,40 @@ class _ClientesScreenState extends State<ClientesScreen> {
               child: RefreshIndicator(
                 onRefresh: _cargar,
                 color: Colors.tealAccent,
-                child: _filtrados.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No hay clientes registrados.',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      )
-                    : ListView(
-                        children: grupos.entries.map((entry) {
-                          final letra = entry.key;
-                          final items = entry.value;
+                child: isLoading && _filtrados.isEmpty
+                    ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+                    : _filtrados.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No hay clientes registrados.',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          )
+                        : ListView(
+                            children: grupos.entries.map((entry) {
+                              final letra = entry.key;
+                              final items = entry.value;
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
-                                child: Text(
-                                  letra,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    letterSpacing: 1.2,
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
+                                    child: Text(
+                                      letra,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              ...items.map((c) => _tarjetaCliente(c)),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                                  ...items.map((c) => _tarjetaCliente(c)),
+                                ],
+                              );
+                            }).toList(),
+                          ),
               ),
             ),
           ],

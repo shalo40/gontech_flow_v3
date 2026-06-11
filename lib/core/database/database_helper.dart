@@ -28,7 +28,7 @@ class DatabaseHelper {
     final path = join(await getDatabasesPath(), 'gontech_flow_v3.db');
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -44,6 +44,7 @@ class DatabaseHelper {
     await _createReparaciones(db);
     await _createRepuestos(db);
     await _createEntregas(db);
+    await _createInformes(db);
     await _createFirmas(db);
     await _createUsuarios(db);
     await _createTareas(db);
@@ -126,6 +127,12 @@ class DatabaseHelper {
     if (oldVersion < 9) {
       await _migratePasswords(db);
     }
+
+    // --- v10: TABLA INFORMES ---
+    if (oldVersion < 10) {
+      await _createInformes(db);
+      debugPrint('✅ Tabla informes creada en migracion v10.');
+    }
   }
 
   Future<void> _migratePasswords(Database db) async {
@@ -155,6 +162,7 @@ class DatabaseHelper {
       CREATE TABLE IF NOT EXISTS clientes (
         id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
+        rut TEXT,
         telefono TEXT,
         correo TEXT,
         direccion TEXT,
@@ -287,6 +295,24 @@ class DatabaseHelper {
     ''');
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_entregas_reparacion ON entregas(id_reparacion);',
+    );
+  }
+
+  Future<void> _createInformes(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS informes (
+        id_informe INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_diagnostico INTEGER NOT NULL,
+        id_tecnico INTEGER,
+        descripcion_general TEXT,
+        conclusiones TEXT,
+        recomendaciones TEXT,
+        creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (id_diagnostico) REFERENCES diagnosticos(id_diagnostico) ON DELETE CASCADE
+      );
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_informes_diagnostico ON informes(id_diagnostico);',
     );
   }
 

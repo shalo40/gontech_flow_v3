@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // <-- Inyectamos Provider
 import 'package:image_picker/image_picker.dart';
 import '../../../core/dao/equipo_dao.dart';
 import '../../../core/models/equipo.dart';
+import '../../../core/providers/helpdesk_provider.dart'; // <-- Importamos tu Provider
 import '../../theme/app_colors.dart';
 
 Future<void> mostrarEquipoModal(
@@ -11,7 +13,6 @@ Future<void> mostrarEquipoModal(
   Equipo? equipoExistente,
   required VoidCallback onGuardado,
 }) async {
-  final dao = EquipoDao();
   final picker = ImagePicker();
 
   final tipoCtrl = TextEditingController(
@@ -161,39 +162,51 @@ Future<void> mostrarEquipoModal(
                     return;
                   }
 
-                  final nuevo = Equipo(
-                    id_equipo: equipoExistente?.id_equipo,
-                    id_cliente: idCliente,
-                    tipo_equipo: tipoCtrl.text.trim(),
-                    marca: marcaCtrl.text.trim(),
-                    modelo: modeloCtrl.text.trim(),
-                    numero_serie: serieCtrl.text.trim(),
-                    descripcion: descripcionCtrl.text.trim(),
-                    foto_path:
-                        fotoSeleccionada?.path ??
-                        equipoExistente?.foto_path ??
-                        '',
-                  );
+                  // Preparamos el mapa exacto que Laravel espera
+                  final equipoParaLaravel = {
+                    'cliente_id': idCliente,
+                    'tipo_equipo': tipoCtrl.text.trim(),
+                    'marca': marcaCtrl.text.trim(),
+                    'modelo': modeloCtrl.text.trim(),
+                    'numero_serie': serieCtrl.text.trim(),
+                    'descripcion': descripcionCtrl.text.trim(),
+                    'foto_path': fotoSeleccionada?.path ?? equipoExistente?.foto_path ?? '',
+                  };
 
-                  if (esEdicion) {
-                    await dao.actualizar(nuevo);
-                  } else {
-                    await dao.insertar(nuevo);
-                  }
+                  try {
+                    final provider = context.read<HelpdeskProvider>();
 
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    onGuardado();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          esEdicion
-                              ? 'Equipo actualizado ✅'
-                              : 'Equipo registrado ✅',
+                    if (esEdicion) {
+                      // Usamos id_equipo que es el identificador de tu modelo en Flutter
+                      await provider.actualizarEquipo(equipoExistente!.id_equipo!, equipoParaLaravel);
+                    } else {
+                      await provider.agregarEquipo(equipoParaLaravel);
+                    }
+
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      onGuardado();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            esEdicion
+                                ? 'Equipo actualizado ✅'
+                                : 'Equipo registrado ✅',
+                          ),
+                          behavior: SnackBarBehavior.floating,
                         ),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('❌ Error: $e'),
+                          backgroundColor: Colors.redAccent,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
                   }
                 },
               ),

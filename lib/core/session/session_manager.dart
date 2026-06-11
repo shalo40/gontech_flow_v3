@@ -6,17 +6,22 @@ class SessionManager {
   static const _k_usuario_correo = 'usuario_correo';
   static const _k_usuario_nombre = 'usuario_nombre';
   static const _k_usuario_rol = 'usuario_rol';
+  static const _k_api_token = 'api_token';
 
   Future<void> iniciar_sesion({
     required String correo,
     required String nombre,
     required String rol,
+    String? apiToken,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_k_sesion_iniciada, true);
     await prefs.setString(_k_usuario_correo, correo);
     await prefs.setString(_k_usuario_nombre, nombre);
     await prefs.setString(_k_usuario_rol, rol);
+    if (apiToken != null && apiToken.isNotEmpty) {
+      await prefs.setString(_k_api_token, apiToken);
+    }
   }
 
   Future<bool> esta_autenticado() async {
@@ -39,5 +44,11 @@ class SessionManager {
     await prefs.remove(_k_usuario_correo);
     await prefs.remove(_k_usuario_nombre);
     await prefs.remove(_k_usuario_rol);
+    await prefs.remove(_k_api_token);
+  }
+
+  Future<String?> obtener_token() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_k_api_token);
   }
 }

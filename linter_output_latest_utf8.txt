@@ -1,0 +1,134 @@
+﻿Resolving dependencies...
+Downloading packages...
+  archive 4.0.7 (4.0.9 available)
+  cross_file 0.3.4+2 (0.3.5+2 available)
+  ffi 2.1.4 (2.2.0 available)
+  file_selector_linux 0.9.3+2 (0.9.4 available)
+  file_selector_macos 0.9.4+4 (0.9.5 available)
+  file_selector_platform_interface 2.6.2 (2.7.0 available)
+  file_selector_windows 0.9.3+4 (0.9.3+5 available)
+  flutter_lints 5.0.0 (6.0.0 available)
+  flutter_plugin_android_lifecycle 2.0.30 (2.0.33 available)
+  flutter_svg 2.2.1 (2.2.3 available)
+  http 1.5.0 (1.6.0 available)
+  image 4.5.4 (4.8.0 available)
+  image_picker 1.2.0 (1.2.1 available)
+  image_picker_android 0.8.13+4 (0.8.13+14 available)
+  image_picker_for_web 3.1.0 (3.1.1 available)
+  image_picker_ios 0.8.13 (0.8.13+6 available)
+  image_picker_macos 0.2.2 (0.2.2+1 available)
+  image_picker_platform_interface 2.11.0 (2.11.1 available)
+  lints 5.1.1 (6.1.0 available)
+  local_auth 2.3.0 (3.0.1 available)
+  local_auth_android 1.0.53 (2.0.5 available)
+  local_auth_darwin 1.6.1 (2.0.3 available)
+  local_auth_windows 1.0.11 (2.0.1 available)
+  matcher 0.12.18 (0.12.19 available)
+  meta 1.17.0 (1.18.1 available)
+  path_provider_android 2.2.18 (2.2.22 available)
+  path_provider_foundation 2.4.2 (2.6.0 available)
+  petitparser 7.0.1 (7.0.2 available)
+  posix 6.0.3 (6.5.0 available)
+  shared_preferences 2.5.3 (2.5.4 available)
+  shared_preferences_android 2.4.14 (2.4.21 available)
+  shared_preferences_foundation 2.5.4 (2.5.6 available)
+  signature 5.5.0 (6.3.0 available)
+  source_span 1.10.1 (1.10.2 available)
+  test_api 0.7.9 (0.7.10 available)
+  vector_graphics_compiler 1.1.19 (1.2.0 available)
+Got dependencies!
+36 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing gontech_flow_v2...                                    
+
+warning - 'deprecated_member_use' isn't a recognized lint rule - analysis_options.yaml:18:5 - undefined_lint
+   info - Don't invoke 'print' in production code - lib\core\dao\firma_dao.dart:33:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\dao\firma_dao.dart:53:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\dao\firma_dao.dart:74:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\dao\ingreso_dao.dart:60:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\dao\ingreso_dao.dart:88:7 - avoid_print
+warning - The diagnostic 'non_constant_identifier_names' doesn't need to be ignored here because it's already being ignored - lib\core\models\diagnostico.dart:2:21 - duplicate_ignore
+warning - The diagnostic 'non_constant_identifier_names' doesn't need to be ignored here because it's already being ignored - lib\core\models\entrega.dart:2:21 - duplicate_ignore
+warning - The diagnostic 'non_constant_identifier_names' doesn't need to be ignored here because it's already being ignored - lib\core\models\equipo.dart:2:21 - duplicate_ignore
+warning - The diagnostic 'non_constant_identifier_names' doesn't need to be ignored here because it's already being ignored - lib\core\models\ingreso.dart:2:21 - duplicate_ignore
+   info - The constant name '_k_sesion_iniciada' isn't a lowerCamelCase identifier - lib\core\session\session_manager.dart:5:16 - constant_identifier_names
+   info - The constant name '_k_usuario_correo' isn't a lowerCamelCase identifier - lib\core\session\session_manager.dart:6:16 - constant_identifier_names
+   info - The constant name '_k_usuario_nombre' isn't a lowerCamelCase identifier - lib\core\session\session_manager.dart:7:16 - constant_identifier_names
+   info - The constant name '_k_usuario_rol' isn't a lowerCamelCase identifier - lib\core\session\session_manager.dart:8:16 - constant_identifier_names
+   info - The constant name '_k_api_token' isn't a lowerCamelCase identifier - lib\core\session\session_manager.dart:9:16 - constant_identifier_names
+  error - The getter 'colorContorno' isn't defined for the type 'PdfTema' - lib\ui\reports\pdf_presupuesto.dart:27:50 - undefined_getter
+  error - The getter 'colorContorno' isn't defined for the type 'PdfTema' - lib\ui\reports\pdf_presupuesto.dart:208:46 - undefined_getter
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\ajustes_screen.dart:129:38 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\ajustes_screen.dart:176:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\ajustes_screen.dart:230:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\cliente_modal.dart:47:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\cliente_modal.dart:145:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\cliente_modal.dart:187:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\cliente_modal.dart:226:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\clientes_screen.dart:67:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\clientes_screen.dart:130:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\clientes_screen.dart:187:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\clientes_screen.dart:200:50 - deprecated_member_use
+warning - The value of the field '_ingresoDao' isn't used - lib\ui\screens\modulos\diagnostico_detalle_screen.dart:22:9 - unused_field
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\diagnostico_modal.dart:60:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\diagnostico_modal.dart:117:64 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\diagnostico_modal.dart:173:66 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\diagnostico_modal.dart:325:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\diagnosticos_screen.dart:101:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\diagnosticos_screen.dart:148:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\diagnosticos_screen.dart:279:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\entregas_screen.dart:163:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\entregas_screen.dart:165:63 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\entregas_screen.dart:168:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\entregas_screen.dart:225:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\entregas_screen.dart:318:58 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\entregas_screen.dart:338:58 - deprecated_member_use
+   info - 'color' is deprecated and shouldn't be used. use colors in eyeStyle and dataModuleStyle instead - lib\ui\screens\modulos\equipo_detalle_screen.dart:382:9 - deprecated_member_use
+   info - 'emptyColor' is deprecated and shouldn't be used. You should use the background color value of your container widget - lib\ui\screens\modulos\equipo_detalle_screen.dart:383:9 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipo_modal.dart:71:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipo_modal.dart:102:60 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipo_modal.dart:142:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipos_screen.dart:111:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipos_screen.dart:199:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipos_screen.dart:210:30 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipos_screen.dart:216:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipos_screen.dart:262:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\equipos_screen.dart:274:56 - deprecated_member_use
+   info - 'color' is deprecated and shouldn't be used. use colors in eyeStyle and dataModuleStyle instead - lib\ui\screens\modulos\equipos_screen.dart:454:9 - deprecated_member_use
+   info - 'emptyColor' is deprecated and shouldn't be used. You should use the background color value of your container widget - lib\ui\screens\modulos\equipos_screen.dart:455:9 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\informe_modal.dart:30:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\informe_modal.dart:99:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\informes_screen.dart:61:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingreso_modal.dart:70:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingreso_modal.dart:98:60 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingreso_modal.dart:199:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingresos_screen.dart:91:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingresos_screen.dart:125:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingresos_screen.dart:136:64 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingresos_screen.dart:226:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingresos_screen.dart:241:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\ingresos_screen.dart:300:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\presupuesto_modal.dart:33:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\presupuesto_modal.dart:128:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\presupuesto_modal.dart:171:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\presupuesto_modal.dart:225:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\presupuestos_screen.dart:120:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\presupuestos_screen.dart:302:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\presupuestos_screen.dart:346:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparacion_detalle_screen.dart:53:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparacion_detalle_screen.dart:82:38 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparacion_detalle_screen.dart:173:30 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparacion_modal.dart:30:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparacion_modal.dart:133:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparaciones_screen.dart:113:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparaciones_screen.dart:205:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparaciones_screen.dart:220:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparaciones_screen.dart:221:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\reparaciones_screen.dart:280:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\repuesto_modal.dart:22:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\repuesto_modal.dart:78:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\repuestos_screen.dart:116:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\repuestos_screen.dart:207:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\modulos\repuestos_screen.dart:220:30 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\ui\screens\ver_bd_screen.dart:81:50 - deprecated_member_use
+
