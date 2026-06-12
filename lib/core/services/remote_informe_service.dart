@@ -1,33 +1,31 @@
-import 'dart:core';
-
 import 'package:dio/dio.dart';
 import '../network/api_client.dart';
 
-class RemoteEntregaService {
+class RemoteInformeService {
   
-  // Obtener todas las entregas registradas (Laravel resolverá el árbol relacional completo)
-  Future<List<dynamic>> obtenerEntregas() async {
+  // Obtener todos los informes (Laravel enviará el árbol relacional completo)
+  Future<List<dynamic>> obtenerInformes() async {
     try {
       final dio = await ApiClient.instance.dio;
-      final response = await dio.get('/entregas');
+      final response = await dio.get('/informes');
       
       if (response.statusCode == 200 && response.data['data'] != null) {
         return response.data['data'] as List<dynamic>;
       }
       return [];
     } catch (e) {
-      print('Error en RemoteEntregaService.obtenerEntregas: $e');
-      throw Exception('Error al conectar con el servidor para obtener el listado de entregas.');
+      print('Error en RemoteInformeService.obtenerInformes: $e');
+      throw Exception('Error al conectar con el servidor para obtener los informes.');
     }
   }
 
-  // Registrar una entrega formalizando el cierre (Incluye firma_base64)
-  Future<Map<String, dynamic>?> crearEntrega(Map<String, dynamic> entregaData) async {
+  // Crear un nuevo informe técnico
+  Future<Map<String, dynamic>?> crearInforme(Map<String, dynamic> informeData) async {
     try {
       final dio = await ApiClient.instance.dio;
       final response = await dio.post(
-        '/entregas',
-        data: entregaData,
+        '/informes',
+        data: informeData,
       );
       
       if (response.statusCode == 201 && response.data['data'] != null) {
@@ -49,17 +47,17 @@ class RemoteEntregaService {
           }
         }
       }
-      throw Exception('Error inesperado al registrar la entrega técnica.');
+      throw Exception('Error inesperado al registrar el informe.');
     }
   }
 
-  // Actualizar datos de entrega o parchar el estado
-  Future<Map<String, dynamic>?> actualizarEntrega(int id, Map<String, dynamic> entregaData) async {
+  // Actualizar un informe existente (ej: corregir conclusiones o recomendaciones)
+  Future<Map<String, dynamic>?> actualizarInforme(int id, Map<String, dynamic> informeData) async {
     try {
       final dio = await ApiClient.instance.dio;
       final response = await dio.put(
-        '/entregas/$id',
-        data: entregaData,
+        '/informes/$id',
+        data: informeData,
       );
       
       if (response.statusCode == 200 && response.data['data'] != null) {
@@ -74,19 +72,19 @@ class RemoteEntregaService {
           throw Exception(responseData['message']);
         }
       }
-      throw Exception('Error al actualizar la hoja de entrega.');
+      throw Exception('Error al actualizar el informe técnico.');
     }
   }
 
-  // Eliminar un registro de entrega
-  Future<bool> eliminarEntrega(int id) async {
+  // Eliminar un informe
+  Future<bool> eliminarInforme(int id) async {
     try {
       final dio = await ApiClient.instance.dio;
-      final response = await dio.delete('/entregas/$id');
+      final response = await dio.delete('/informes/$id');
       
       return response.statusCode == 200;
     } catch (e) {
-      throw Exception('Error al eliminar la entrega del servidor.');
+      throw Exception('Error al eliminar el informe del servidor.');
     }
   }
 }

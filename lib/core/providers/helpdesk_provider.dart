@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gontech_flow_v2/core/models/diagnostico.dart';
 import 'package:gontech_flow_v2/core/models/ingreso.dart';
 import 'package:gontech_flow_v2/core/models/reparacion.dart';
-import 'package:gontech_flow_v2/core/models/entrega.dart'; // <-- Para el fallback local
+import 'package:gontech_flow_v2/core/models/entrega.dart';
 import '../config/api_config.dart';
 import '../dao/cliente_dao.dart';
 import '../dao/equipo_dao.dart';
@@ -21,7 +21,10 @@ import '../services/remote_diagnostico_service.dart';
 import '../services/remote_presupuesto_service.dart';
 import '../services/remote_reparacion_service.dart';
 import '../services/remote_repuesto_service.dart';
-import '../services/remote_entrega_service.dart'; 
+import '../services/remote_entrega_service.dart';
+import '../services/remote_informe_service.dart';
+import '../services/remote_ajuste_service.dart'; 
+import '../services/remote_documento_service.dart'; // <-- Importación del gestor de archivos
 import '../models/cliente.dart';
 
 class HelpdeskProvider extends ChangeNotifier {
@@ -44,6 +47,12 @@ class HelpdeskProvider extends ChangeNotifier {
   final RemoteReparacionService _remoteReparacion = RemoteReparacionService();
   final RemoteRepuestoService _remoteRepuesto = RemoteRepuestoService(); 
   final RemoteEntregaService _remoteEntrega = RemoteEntregaService(); 
+  final RemoteInformeService _remoteInforme = RemoteInformeService();
+  final RemoteAjusteService _remoteAjuste = RemoteAjusteService(); 
+  final RemoteDocumentoService _remoteDocumento = RemoteDocumentoService(); // <-- Instancia del servicio
+
+  // Diccionario global de configuraciones (Key-Value)
+  Map<String, dynamic> configuracion = {}; 
 
   Map<String, int> resumen = {
     'Clientes': 0, 'Equipos': 0, 'Ingresos': 0, 'Diagnósticos': 0, 'Presupuestos': 0, 'Reparaciones': 0,
@@ -71,6 +80,8 @@ class HelpdeskProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get entregas => _entregas;
   List<Map<String, dynamic>> _informes = [];
   List<Map<String, dynamic>> get informes => _informes;
+  List<Map<String, dynamic>> _documentos = []; // <-- Lista global de documentos
+  List<Map<String, dynamic>> get documentos => _documentos;
 
   // --- Estadísticas requeridas por estadisticas_screen ---
   int get reparacionesEnProceso => _reparaciones.where((r) => r['estado'] == 'en_proceso').length;
@@ -104,6 +115,103 @@ class HelpdeskProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  // --- GESTIÓN DE AJUSTES GLOBALES ---
+  Future<bool> guardarAjustesGlobales(List<Map<String, dynamic>> listaAjustes) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final exito = await _remoteAjuste.actualizarAjustesEnMasa(listaAjustes);
+        if (exito) {
+          await recargarAjustes();
+          return true;
+        }
+        return false;
+      }
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> recargarAjustes() async {
+    if (await ApiConfig.useApiMode()) {
+      try {
+        configuracion = await _remoteAjuste.obtenerAjustes();
+      } catch (e) {
+        print('Error recargando ajustes desde API: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  // --- GESTIÓN DE DOCUMENTOS POLIMÓRFICOS ---
+  Future<bool> asociarDocumentoAEntidad({
+    required String tipo,
+    required int id,
+    required String rutaLocal,
+    String? nombrePersonalizado,
+  }) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteDocumento.subirDocumento(
+          entidadTipo: tipo,
+          entidadId: id,
+          filePath: rutaLocal,
+          nombreArchivo: nombrePersonalizado,
+        );
+        if (res != null) {
+          await recargarDocumentos();
+          return true;
+        }
+        return false;
+      }
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> borrarDocumento(int id) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final exito = await _remoteDocumento.eliminarDocumento(id);
+        if (exito) {
+          await recargarDocumentos();
+        }
+        return exito;
+      }
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> recargarDocumentos({String? tipo, int? id}) async {
+    if (await ApiConfig.useApiMode()) {
+      try {
+        final data = await _remoteDocumento.obtenerDocumentos(tipo: tipo, id: id);
+        _documentos = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (e) {
+        print('Error recargando documentos desde API: $e');
+      }
+    }
+    notifyListeners();
   }
 
   // --- CRUD CLIENTES ---
@@ -401,7 +509,6 @@ class HelpdeskProvider extends ChangeNotifier {
         }
         return false;
       }
-      // Modo Local histórico
       final id = await _entregasDao.insertar(data as Entrega);
       if (id > 0) { 
         await recargarEntregas(); 
@@ -416,7 +523,6 @@ class HelpdeskProvider extends ChangeNotifier {
     }
   }
 
-  // Método agregado para actualizar la entrega y su firma en Base64
   Future<bool> actualizarEntrega(int id, Map<String, dynamic> data) async {
     _loading = true;
     notifyListeners();
@@ -429,7 +535,6 @@ class HelpdeskProvider extends ChangeNotifier {
         }
         return false;
       }
-      // Modo Local (Fallback)
       await _entregasDao.actualizarEstado(id, data['estado'] ?? 'entregado');
       await recargarEntregas();
       return true;
@@ -455,13 +560,66 @@ class HelpdeskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- MÉTODOS DE RECARGA RESTANTES ---
+  // --- CRUD INFORMES ---
+  Future<bool> agregarInforme(Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteInforme.crearInforme(data);
+        if (res != null) { 
+          await recargarInformes(); 
+          return true; 
+        }
+        return false;
+      }
+      return false;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> actualizarInforme(int id, Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteInforme.actualizarInforme(id, data);
+        if (res != null) { 
+          await recargarInformes(); 
+          return true; 
+        }
+        return false;
+      }
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> recargarInformes() async {
-    _informes = await _informeDao.listarDetallado();
+    if (await ApiConfig.useApiMode()) {
+      try {
+        final data = await _remoteInforme.obtenerInformes();
+        _informes = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (e) {
+        print('Error recargando informes desde API: $e');
+      }
+    } else {
+      _informes = await _informeDao.listarDetallado();
+    }
     notifyListeners();
   }
 
+  // --- RECARGA MAESTRA ---
   Future<void> recargarTodo() async {
+    await recargarAjustes();
     await recargarClientes();
     await recargarEquipos();
     await recargarIngresos();
@@ -471,5 +629,6 @@ class HelpdeskProvider extends ChangeNotifier {
     await recargarRepuestos();
     await recargarEntregas(); 
     await recargarInformes();
+    await recargarDocumentos(); // <-- Sincronizado en el arranque
   }
 }

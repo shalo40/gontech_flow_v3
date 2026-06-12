@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
 import '../../../core/providers/helpdesk_provider.dart';
-import '../../theme/app_colors.dart';
 
 Future<void> mostrarFirmaModal(
   BuildContext context,

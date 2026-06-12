@@ -7,6 +7,7 @@ environment:
   sdk: ^3.9.2
 
 dependencies:
+  permission_handler: ^11.3.0
   flutter:
     sdk: flutter
 
@@ -41,6 +42,8 @@ dependencies:
   # Firma digital
   signature: ^5.4.0
   google_mlkit_text_recognition: ^0.15.1
+  file_picker: ^11.0.2
+  device_info_plus: ^12.4.0
 
 dev_dependencies:
   flutter_test:

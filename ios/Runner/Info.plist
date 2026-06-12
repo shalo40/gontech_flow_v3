@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+    <string>Gontech Solutions requiere acceso a la galería para adjuntar evidencias técnicas a las reparaciones.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Gontech Solutions requiere acceso a la cámara para fotografiar equipos.</string>
 </dict>
 </plist>

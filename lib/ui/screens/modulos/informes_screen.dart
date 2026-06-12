@@ -27,6 +27,28 @@ class _InformesScreenState extends State<InformesScreen> {
     await context.read<HelpdeskProvider>().recargarInformes();
   }
 
+  // --- Helpers de Extracción Segura ---
+  String _getCliente(Map<String, dynamic> i) {
+    if (i.containsKey('cliente') && i['cliente'] != null && i['cliente'].toString().isNotEmpty) {
+      return i['cliente'].toString();
+    }
+    if (i['diagnostico'] != null && i['diagnostico']['ingreso'] != null && i['diagnostico']['ingreso']['equipo'] != null && i['diagnostico']['ingreso']['equipo']['cliente'] != null) {
+      return i['diagnostico']['ingreso']['equipo']['cliente']['nombre'] ?? 'Cliente desconocido';
+    }
+    return 'Cliente desconocido';
+  }
+
+  String _getMarca(Map<String, dynamic> i) {
+    if (i.containsKey('marca') && i['marca'] != null && i['marca'].toString().isNotEmpty) {
+      return i['marca'].toString();
+    }
+    if (i['diagnostico'] != null && i['diagnostico']['ingreso'] != null && i['diagnostico']['ingreso']['equipo'] != null) {
+      return i['diagnostico']['ingreso']['equipo']['marca'] ?? 'Sin marca';
+    }
+    return 'Equipo';
+  }
+  // -----------------------------------
+
   @override
   Widget build(BuildContext context) {
     // Escuchamos los informes desde el provider
@@ -39,8 +61,9 @@ class _InformesScreenState extends State<InformesScreen> {
         backgroundColor: Colors.tealAccent,
         foregroundColor: AppColors.fondo,
         onPressed: () async {
-          // Nota: Asegúrate de pasar el ID de diagnóstico correcto aquí
-          await mostrarInformeModal(context, 1); 
+          // El modal de informe debe permitir seleccionar el diagnóstico base
+          // Usamos 0 como placeholder; idealmente el modal debería tener un Dropdown
+          await mostrarInformeModal(context, 0); 
           await _cargar();
         },
         child: const Icon(Icons.add),
@@ -59,10 +82,14 @@ class _InformesScreenState extends State<InformesScreen> {
                 : RefreshIndicator(
                     onRefresh: _cargar,
                     color: Colors.tealAccent,
+                    backgroundColor: AppColors.fondo,
                     child: ListView.builder(
                       itemCount: informes.length,
                       itemBuilder: (context, index) {
                         final i = informes[index];
+                        final cliente = _getCliente(i);
+                        final marca = _getMarca(i);
+
                         return Card(
                           color: AppColors.fondo.withOpacity(0.9),
                           shape: RoundedRectangleBorder(
@@ -75,16 +102,19 @@ class _InformesScreenState extends State<InformesScreen> {
                               color: Colors.tealAccent,
                             ),
                             title: Text(
-                              '${i['marca'] ?? 'Equipo'} - ${i['cliente'] ?? 'Sin cliente'}',
+                              '$marca - $cliente',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            subtitle: Text(
-                              'Conclusiones: ${i['conclusiones'] ?? 'N/A'}\n'
-                              'Recomendaciones: ${i['recomendaciones'] ?? ''}',
-                              style: const TextStyle(color: Colors.white70),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: Text(
+                                'Conclusiones: ${i['conclusiones'] ?? 'N/A'}\n'
+                                'Recomendaciones: ${i['recomendaciones'] ?? 'Ninguna'}',
+                                style: const TextStyle(color: Colors.white70, height: 1.3),
+                              ),
                             ),
                             trailing: IconButton(
                               icon: const Icon(
@@ -98,7 +128,10 @@ class _InformesScreenState extends State<InformesScreen> {
                                 } catch (e) {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error al generar PDF: $e')),
+                                      SnackBar(
+                                        content: Text('Error al generar PDF: $e'),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
                                     );
                                   }
                                 }
