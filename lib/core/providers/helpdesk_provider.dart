@@ -280,25 +280,50 @@ class HelpdeskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- CRUD INGRESOS ---
+// --- CRUD INGRESOS ---
   Future<bool> agregarIngreso(Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
     try {
       if (await ApiConfig.useApiMode()) {
         final res = await _remoteIngreso.crearIngreso(data);
-        if (res != null) { await recargarIngresos(); return true; }
+        if (res != null) { 
+          await recargarIngresos(); 
+          return true; 
+        }
         return false;
       }
-      return await _ingresoDao.insertar(data as Ingreso) > 0;
-    } finally { recargarIngresos(); notifyListeners(); }
+      // Modo Local histórico
+      final id = await _ingresoDao.insertar(data as Ingreso);
+      if (id > 0) {
+        await recargarIngresos();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners(); // Sincroniza el estado de carga una sola vez al terminar todo
+    }
   }
 
   Future<void> recargarIngresos() async {
     if (await ApiConfig.useApiMode()) {
-      final data = await _remoteIngreso.obtenerIngresos();
-      _ingresos = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      try {
+        final data = await _remoteIngreso.obtenerIngresos();
+        // Mapeo seguro tolerante a estructuras complejas u objetos relacionales de Laravel
+        _ingresos = data.map((e) {
+          return Map<String, dynamic>.from(e as Map);
+        }).toList();
+      } catch (e) {
+        print('❌ Error recargando ingresos desde API: $e');
+      }
     } else {
       _ingresos = await _ingresoDao.listarIngresosDetallados();
     }
+    
+    // Parametrización de totales para contadores y Dashboard
     resumen['Ingresos'] = _ingresos.length;
     ultimosIngresos = _ingresos.take(5).toList();
     notifyListeners();

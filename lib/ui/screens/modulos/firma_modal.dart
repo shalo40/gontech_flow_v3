@@ -1,19 +1,21 @@
-import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
+import 'package:path_provider/path_provider.dart'; // <-- Para crear el archivo temporal
 import '../../../core/providers/helpdesk_provider.dart';
 
 Future<void> mostrarFirmaModal(
   BuildContext context,
-  int idEntrega,
+  int idEntidad, 
+  String tipoEntidad, // <-- ¡NUEVO! 'ingreso' o 'entrega'
   Function onGuardado,
 ) async {
   final signatureController = SignatureController(
-    penStrokeWidth: 2,
+    penStrokeWidth: 3, // Un poco más grueso para que se vea mejor en PDF
     penColor: Colors.tealAccent,
-    exportBackgroundColor: Colors.black,
+    exportBackgroundColor: Colors.transparent, // Transparente para usarla sobre recibos blancos
   );
 
   await showDialog(
@@ -45,9 +47,12 @@ Future<void> mostrarFirmaModal(
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Por favor, firme dentro del recuadro:',
-                      style: TextStyle(color: Colors.white70),
+                    Text(
+                      tipoEntidad == 'ingreso' 
+                        ? 'Firme para aceptar las condiciones de recepción:'
+                        : 'Firme para confirmar la entrega del equipo:',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
 
@@ -84,7 +89,7 @@ Future<void> mostrarFirmaModal(
                         ),
                         ElevatedButton.icon(
                           icon: const Icon(Icons.save, color: Colors.black),
-                          label: const Text('Guardar'),
+                          label: const Text('Guardar firma'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.tealAccent,
                             foregroundColor: Colors.black,
@@ -94,34 +99,33 @@ Future<void> mostrarFirmaModal(
                           ),
                           onPressed: () async {
                             if (signatureController.isNotEmpty) {
+                              // Obtenemos los bytes del dibujo
                               final Uint8List? data = await signatureController.toPngBytes();
                               
                               if (data != null) {
-                                // 1. Convertimos los bytes del lienzo a un string Base64
-                                final String base64Firma = 'data:image/png;base64,${base64Encode(data)}';
-
-                                // 2. Empaquetamos la actualización
-                                final actualizacionEntrega = {
-                                  'firma_base64': base64Firma,
-                                  'estado': 'entregado',
-                                };
-
                                 try {
-                                  // 3. Enviamos la carga útil al Cerebro
+                                  // 1. Creamos un archivo temporal físico en el dispositivo
+                                  final tempDir = await getTemporaryDirectory();
+                                  final file = await File('${tempDir.path}/firma_${tipoEntidad}_$idEntidad.png').create();
+                                  await file.writeAsBytes(data);
+
+                                  // 2. Usamos tu API Polimórfica para subir la firma como documento
                                   final provider = context.read<HelpdeskProvider>();
-                                  await provider.actualizarEntrega(idEntrega, actualizacionEntrega);
+                                  await provider.asociarDocumentoAEntidad(
+                                    tipo: tipoEntidad,
+                                    id: idEntidad,
+                                    rutaLocal: file.path,
+                                    nombrePersonalizado: 'firma_cliente.png',
+                                  );
+
+                                  // 3. (Opcional) Si es entrega, actualizamos el estado
+                                  if (tipoEntidad == 'entrega') {
+                                    await provider.actualizarEntrega(idEntidad, {'estado': 'entregado'});
+                                  }
 
                                   if (context.mounted) {
-                                    Navigator.pop(context);
+                                    Navigator.pop(context); // Cierra el modal
                                     onGuardado();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          '✍️ Firma guardada y entrega finalizada con éxito',
-                                        ),
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
                                   }
                                 } catch (e) {
                                   if (context.mounted) {
@@ -129,7 +133,6 @@ Future<void> mostrarFirmaModal(
                                       SnackBar(
                                         content: Text('❌ Error al guardar firma: $e'),
                                         backgroundColor: Colors.redAccent,
-                                        behavior: SnackBarBehavior.floating,
                                       ),
                                     );
                                   }

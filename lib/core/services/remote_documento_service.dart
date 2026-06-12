@@ -39,16 +39,16 @@ class RemoteDocumentoService {
     try {
       final dio = await ApiClient.instance.dio;
 
-      // Construcción del cuerpo Multipart para la transferencia de archivos binarios
-      final formData = FormData.fromMap({
-        'entidad_tipo': entidadTipo,
-        'entidad_id': entidadId,
-        'nombre_archivo': nombreArchivo,
-        'archivo': await MultipartFile.fromFile(
-          filePath,
-          filename: filePath.split('/').last,
-        ),
-      });
+  // Construcción del cuerpo Multipart
+        final formData = FormData.fromMap({
+          'entidad_tipo': entidadTipo,
+          'entidad_id': entidadId.toString(), // 👈 Convertido a string
+          'nombre_archivo': nombreArchivo,
+          'file': await MultipartFile.fromFile( // 👈 Cambiado de 'archivo' a 'file'
+            filePath,
+            filename: filePath.split('/').last,
+          ),
+        });
 
       final response = await dio.post(
         '/documentos',

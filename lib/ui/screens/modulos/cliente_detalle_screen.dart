@@ -208,11 +208,11 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
           const SizedBox(height: 20),
           _seccionTitulo('Contacto'),
           const SizedBox(height: 8),
-          _infoTile(Icons.phone_outlined, 'Telefono', c.telefono),
-          _infoTile(Icons.email_outlined, 'Correo', c.correo),
-          _infoTile(Icons.location_on_outlined, 'Direccion', c.direccion),
-          if (c.notas.isNotEmpty)
-            _infoTile(Icons.notes_outlined, 'Notas', c.notas),
+          _infoTile(Icons.phone_outlined, 'Telefono', c.telefono ?? ''),
+          _infoTile(Icons.email_outlined, 'Correo', c.correo ?? ''),
+          _infoTile(Icons.location_on_outlined, 'Direccion', c.direccion ?? ''),
+          if (c.notas != null && c.notas!.isNotEmpty)
+            _infoTile(Icons.notes_outlined, 'Notas', c.notas ?? ''),
         ],
       ),
     );

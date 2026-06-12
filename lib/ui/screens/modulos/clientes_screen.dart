@@ -22,7 +22,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
   @override
   void initState() {
     super.initState();
-    // Usamos addPostFrameCallback para llamar al provider de forma segura después de renderizar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _cargar();
     });
@@ -30,11 +29,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
 
   Future<void> _cargar() async {
     final provider = context.read<HelpdeskProvider>();
-    
-    // Le pedimos al provider que actualice la lista (desde Laravel o Local)
     await provider.recargarClientes();
-    
-    // Aplicamos el filtro actual (o mostramos todos si el buscador está vacío)
     _filtrar(buscadorCtrl.text);
   }
 
@@ -43,14 +38,12 @@ class _ClientesScreenState extends State<ClientesScreen> {
     final provider = context.read<HelpdeskProvider>();
     
     setState(() {
-      // Filtramos directamente desde la lista oficial del provider
       _filtrados = provider.clientes.where((c) {
         return c.nombre.toLowerCase().contains(query) ||
             c.correo.toLowerCase().contains(query) ||
             c.telefono.toLowerCase().contains(query);
       }).toList();
       
-      // Ordenamos alfabéticamente
       _filtrados.sort((a, b) => a.nombre.compareTo(b.nombre));
     });
   }
@@ -97,19 +90,22 @@ class _ClientesScreenState extends State<ClientesScreen> {
     if (ok == true) {
       try {
         final provider = context.read<HelpdeskProvider>();
-        // Llamamos al Provider para que elimine en API o Local
-        await provider.eliminarCliente(c.idCliente!);
         
-        // Actualizamos visualmente el buscador/lista
-        _filtrar(buscadorCtrl.text);
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cliente eliminado correctamente ✅'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        // Verificación segura antes de intentar eliminar
+        if (c.idCliente != null) {
+          await provider.eliminarCliente(c.idCliente!);
+          _filtrar(buscadorCtrl.text);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Cliente eliminado correctamente ✅'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        } else {
+          throw Exception('ID de cliente inválido.');
         }
       } catch (e) {
         if (mounted) {
@@ -128,7 +124,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
   @override
   Widget build(BuildContext context) {
     final grupos = _agruparPorLetra(_filtrados);
-    // Escuchamos el estado de carga del provider
     final isLoading = context.watch<HelpdeskProvider>().loading;
 
     return LayoutPrincipal(
@@ -212,7 +207,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
     );
   }
 
-  /// 💎 Tarjeta visual de cliente con foto, nombre y opciones desplegables
   Widget _tarjetaCliente(Cliente c) {
     return Card(
       color: Colors.grey.shade900.withOpacity(0.9),
@@ -274,8 +268,20 @@ class _ClientesScreenState extends State<ClientesScreen> {
             icon: Icons.playlist_add,
             texto: 'Registrar ingreso',
             onTap: () async {
-              await mostrarIngresoModal(context, c.idCliente!);
-              await _cargar();
+              // --- CORRECCIÓN DEL CRASH (Null check operator) ---
+              if (c.idCliente != null) {
+                await mostrarIngresoModal(context, c.idCliente!);
+                await _cargar();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('⚠️ Error: Este cliente no tiene un ID asignado. Intenta recargar la lista.'),
+                    backgroundColor: Colors.orangeAccent,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              // --------------------------------------------------
             },
           ),
           const Divider(color: Colors.white24, height: 0),
@@ -302,7 +308,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
     );
   }
 
-  /// 🔍 Visualización completa de foto
   void _mostrarFotoAmpliada(Cliente c) {
     showDialog(
       context: context,
@@ -322,7 +327,6 @@ class _ClientesScreenState extends State<ClientesScreen> {
     );
   }
 
-  /// 📦 Item de menú dentro del desplegable
   Widget _itemOpcion({
     required IconData icon,
     required String texto,

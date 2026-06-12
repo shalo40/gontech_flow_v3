@@ -1,49 +1,68 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // Importante para inyectar el provider
-import 'package:image_picker/image_picker.dart';
-import '../../../core/dao/equipo_dao.dart';
-import '../../../core/models/equipo.dart';
+import 'package:provider/provider.dart'; 
+import 'package:image_picker/image_picker.dart'; 
 import '../../../core/providers/helpdesk_provider.dart';
 import '../../theme/app_colors.dart';
 import 'equipo_modal.dart';
+import 'firma_modal.dart'; 
 
 Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
-  final equipoDao = EquipoDao();
-  final picker = ImagePicker();
+  // 1. Forzamos la recarga ANTES de abrir el modal para garantizar que el desplegable tenga datos
+  final providerInicial = context.read<HelpdeskProvider>();
+  await providerInicial.recargarEquipos();
 
-  List<Equipo> equiposCliente = await equipoDao.listarPorCliente(idCliente);
-  Equipo? equipoSeleccionado;
-  File? fotoEquipo;
-  final accesoriosCtrl = TextEditingController();
-  final obsCtrl = TextEditingController();
+  final motivoCtrl = TextEditingController(); // <-- ¡NUEVO! Para la falla principal
+  final obsCtrl = TextEditingController();    // Para el estado físico (rayones, etc)
+  final accesoriosExtraCtrl = TextEditingController();
+  final picker = ImagePicker();
+  
+  int? idEquipoSeleccionado;
+  File? fotoEvidencia; 
+
+  final opcionesAccesorios = [
+    'Cargador', 'Cable USB', 'Funda / Estuche', 'Mouse', 'Teclado', 'Bolso'
+  ];
+  List<String> accesoriosSeleccionados = [];
+
+  int _getId(Map<String, dynamic> e) {
+    return int.tryParse((e['id_equipo'] ?? e['id'] ?? '0').toString()) ?? 0;
+  }
 
   await showDialog(
     context: context,
     barrierDismissible: false,
     builder: (context) {
       return StatefulBuilder(
-        builder: (context, setState) {
+        builder: (context, setModalState) {
+          final provider = context.watch<HelpdeskProvider>();
           
-          Future<void> crearEquipo() async {
-            await mostrarEquipoModal(
-              context,
-              idCliente: idCliente,
-              onGuardado: () async {
-                final nuevos = await equipoDao.listarPorCliente(idCliente);
-                setState(() => equiposCliente = nuevos);
-              },
+          final equiposCliente = provider.equipos.where((e) {
+            final eIdCliente = int.tryParse((e['id_cliente'] ?? e['cliente_id'] ?? '0').toString()) ?? 0;
+            return eIdCliente == idCliente;
+          }).toList();
+
+          Future<void> capturarEvidencia() async {
+            final XFile? imagen = await picker.pickImage(
+              source: ImageSource.camera,
+              imageQuality: 70, 
             );
+            if (imagen != null) {
+              setModalState(() => fotoEvidencia = File(imagen.path));
+            }
           }
 
           return AlertDialog(
-            backgroundColor: AppColors.fondo.withOpacity(0.95),
+            backgroundColor: AppColors.fondo.withOpacity(0.97),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Row(
-              children: const [
+            title: const Row(
+              children: [
                 Icon(Icons.assignment_add, color: Colors.tealAccent),
                 SizedBox(width: 8),
-                Text('Nuevo ingreso', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Text(
+                  'Nuevo ingreso técnico', 
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)
+                ),
               ],
             ),
             content: SingleChildScrollView(
@@ -51,71 +70,257 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                 constraints: const BoxConstraints(maxWidth: 500),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Selección de equipo
-                    DropdownButtonFormField<Equipo>(
-                      value: equipoSeleccionado,
-                      decoration: InputDecoration(
-                        labelText: 'Seleccionar equipo',
-                        labelStyle: const TextStyle(color: Colors.white70),
-                        filled: true,
-                        fillColor: Colors.black26,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                      ),
-                      dropdownColor: AppColors.fondo,
-                      items: equiposCliente.map((e) {
-                        return DropdownMenuItem(
-                          value: e,
-                          child: Text('${e.tipo_equipo} • ${e.marca} ${e.modelo}', style: const TextStyle(color: Colors.white)),
-                        );
-                      }).toList(),
-                      onChanged: (nuevo) => setState(() => equipoSeleccionado = nuevo),
-                    ),
+                    // --- FOTO DE RECEPCIÓN ---
+                    const Text('Estado de recepción (Foto)', style: TextStyle(color: Colors.white70, fontSize: 13)),
                     const SizedBox(height: 8),
+                    Center(
+                      child: GestureDetector(
+                        onTap: capturarEvidencia,
+                        child: Container(
+                          width: double.infinity,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.black26,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: fotoEvidencia != null ? Colors.tealAccent : Colors.white24,
+                            ),
+                          ),
+                          child: fotoEvidencia != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(13),
+                                  child: Image.file(fotoEvidencia!, fit: BoxFit.cover),
+                                )
+                              : const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.camera_alt, color: Colors.tealAccent, size: 32),
+                                    SizedBox(height: 6),
+                                    Text('Capturar estado del equipo', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // --- SELECCIÓN DE EQUIPO CON PROTECCIÓN CONTRA LISTAS VACÍAS ---
+                    if (equiposCliente.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orangeAccent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.orangeAccent.withOpacity(0.5)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'El cliente no tiene equipos registrados. Haz clic en "Agregar equipo" para comenzar.',
+                                style: TextStyle(color: Colors.orangeAccent, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        isExpanded: true,
+                        value: idEquipoSeleccionado,
+                        dropdownColor: AppColors.fondo,
+                        icon: const Icon(Icons.arrow_drop_down, color: Colors.tealAccent),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.devices, color: Colors.tealAccent),
+                          labelText: 'Seleccionar equipo',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          filled: true,
+                          fillColor: Colors.black26,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                        ),
+                        items: equiposCliente.map((e) {
+                          final id = _getId(e);
+                          return DropdownMenuItem<int>(
+                            value: id,
+                            child: Text(
+                              '${e['tipo_equipo'] ?? 'Equipo'} • ${e['marca'] ?? ''} ${e['modelo'] ?? ''}', 
+                              style: const TextStyle(color: Colors.white),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (nuevoId) => setModalState(() => idEquipoSeleccionado = nuevoId),
+                      ),
+                    const SizedBox(height: 4),
+
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton.icon(
-                        onPressed: crearEquipo,
-                        icon: const Icon(Icons.add_circle_outline, color: Colors.tealAccent),
+                        onPressed: () async {
+                          final equipoCreado = await mostrarEquipoModal(context, idCliente: idCliente);
+                          if (equipoCreado == true) {
+                            await provider.recargarEquipos();
+                            final actualizados = provider.equipos.where((e) {
+                              final eIdCliente = int.tryParse((e['id_cliente'] ?? e['cliente_id'] ?? '0').toString()) ?? 0;
+                              return eIdCliente == idCliente;
+                            }).toList();
+
+                            if (actualizados.isNotEmpty) {
+                              setModalState(() {
+                                // Selecciona el primero de la lista (el más reciente devuelto por Laravel)
+                                idEquipoSeleccionado = _getId(actualizados.first);
+                              });
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.add_circle_outline, color: Colors.tealAccent, size: 18),
                         label: const Text('Agregar equipo', style: TextStyle(color: Colors.tealAccent)),
                       ),
                     ),
-                    _campo(accesoriosCtrl, 'Accesorios entregados', Icons.cable_rounded),
-                    _campo(obsCtrl, 'Observaciones', Icons.notes),
+                    const Divider(color: Colors.white24, height: 10),
+
+                    // --- EL PROBLEMA / MOTIVO DEL INGRESO ---
+                    _campo(motivoCtrl, 'Falla reportada / Motivo del ingreso', Icons.report_problem, maxLines: 2),
+                    const SizedBox(height: 8),
+
+                    // --- CHIPS DE ACCESORIOS ---
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text('Accesorios entregados', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    ),
+                    Wrap(
+                      spacing: 8.0,
+                      runSpacing: 4.0,
+                      children: opcionesAccesorios.map((accesorio) {
+                        final isSelected = accesoriosSeleccionados.contains(accesorio);
+                        return FilterChip(
+                          label: Text(accesorio),
+                          labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white70),
+                          selected: isSelected,
+                          selectedColor: Colors.tealAccent,
+                          backgroundColor: Colors.black26,
+                          checkmarkColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          side: BorderSide(color: isSelected ? Colors.tealAccent : Colors.white24),
+                          onSelected: (bool selected) {
+                            setModalState(() {
+                              if (selected) {
+                                accesoriosSeleccionados.add(accesorio);
+                              } else {
+                                accesoriosSeleccionados.remove(accesorio);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    _campo(accesoriosExtraCtrl, 'Otros accesorios (Opcional)', Icons.cable_rounded),
+                    
+                    // --- OBSERVACIONES FÍSICAS ---
+                    _campo(obsCtrl, 'Estado físico (Rayones, golpes, etc.)', Icons.search, maxLines: 2),
                   ],
                 ),
               ),
             ),
+            actionsAlignment: MainAxisAlignment.spaceBetween,
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+              TextButton.icon(
+                onPressed: () => Navigator.pop(context), 
+                icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                label: const Text('Cancelar', style: TextStyle(color: Colors.white70))
+              ),
               ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.tealAccent.withOpacity(0.2),
+                  foregroundColor: Colors.tealAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
                 icon: const Icon(Icons.save),
                 label: const Text('Registrar'),
                 onPressed: () async {
-                  if (equipoSeleccionado == null) return;
+                  if (idEquipoSeleccionado == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('⚠️ Selecciona un equipo para el ingreso.')),
+                    );
+                    return;
+                  }
+                  
+                  if (motivoCtrl.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('⚠️ Debes ingresar la falla o motivo reportado.')),
+                    );
+                    return;
+                  }
 
-                  // Preparamos el mapa para el Provider (compatible con API y Local)
+                  List<String> totalAccesorios = List.from(accesoriosSeleccionados);
+                  if (accesoriosExtraCtrl.text.trim().isNotEmpty) {
+                    totalAccesorios.add(accesoriosExtraCtrl.text.trim());
+                  }
+
+                  // Fusionamos el motivo y el estado físico para mandarlo en la columna "observaciones"
+                  final motivoFalla = motivoCtrl.text.trim();
+                  final estadoFisico = obsCtrl.text.trim().isEmpty ? 'Sin detalles físicos' : obsCtrl.text.trim();
+                  final observacionesCombinadas = 'FALLA REPORTADA:\n$motivoFalla\n\nESTADO FÍSICO:\n$estadoFisico';
+
                   final ingresoData = {
-                    'equipo_id': equipoSeleccionado!.id_equipo,
+                    'equipo_id': idEquipoSeleccionado,
+                    'id_equipo': idEquipoSeleccionado,
                     'fecha_ingreso': DateTime.now().toIso8601String(),
-                    'accesorios': accesoriosCtrl.text.trim(),
-                    'observaciones': obsCtrl.text.trim(),
-                    'estado_ingreso': 'pendiente',
-                  };
+                    'accesorios_entregados': totalAccesorios.join(', '),
+                    'accesorios': totalAccesorios.join(', '),
+                    'observaciones': observacionesCombinadas,
+                    // 👇 VOLVEMOS A 'pendiente' PARA QUE MYSQL NO LO RECHACE
+                    'estado_ingreso': 'pendiente', 
+                    'estado': 'pendiente',
+                      };
 
                   try {
-                    // Usamos el provider en lugar de llamar al DAO directamente
-                    final provider = context.read<HelpdeskProvider>();
-                    await provider.agregarIngreso(ingresoData);
+                    final exito = await provider.agregarIngreso(ingresoData);
 
-                    if (context.mounted) {
+                    if (exito && context.mounted) {
+                      final idNuevoIngreso = _getId(provider.ingresos.first);
+
+                      if (fotoEvidencia != null) {
+                        await provider.asociarDocumentoAEntidad(
+                          tipo: 'ingreso',
+                          id: idNuevoIngreso,
+                          rutaLocal: fotoEvidencia!.path,
+                          nombrePersonalizado: 'evidencia_ingreso_$idNuevoIngreso.jpg',
+                        );
+                      }
+
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Ingreso registrado correctamente ✅')),
-                      );
+
+                      if (context.mounted) {
+                        await mostrarFirmaModal(context, idNuevoIngreso, 'ingreso', () {});
+                      }
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('📥 ¡Ingreso registrado!'),
+                            action: SnackBarAction(
+                              label: 'VER COMPROBANTE',
+                              textColor: Colors.tealAccent,
+                              onPressed: () {},
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 6),
+                          ),
+                        );
+                      }
                     }
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('❌ Error en el flujo: $e'), backgroundColor: Colors.redAccent),
+                      );
+                    }
                   }
                 },
               ),
@@ -127,11 +332,12 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
   );
 }
 
-Widget _campo(TextEditingController ctrl, String label, IconData icon) {
+Widget _campo(TextEditingController ctrl, String label, IconData icon, {int maxLines = 1}) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 6),
     child: TextField(
       controller: ctrl,
+      maxLines: maxLines,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         prefixIcon: Icon(icon, color: Colors.tealAccent),
@@ -140,6 +346,7 @@ Widget _campo(TextEditingController ctrl, String label, IconData icon) {
         filled: true,
         fillColor: Colors.black26,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.tealAccent)),
       ),
     ),
   );

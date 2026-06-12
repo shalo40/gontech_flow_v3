@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../../core/dao/ingreso_dao.dart';
-import '../../../core/dao/equipo_dao.dart';
-import '../../../core/dao/cliente_dao.dart';
+import 'package:provider/provider.dart';
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
 import 'diagnostico_modal.dart';
@@ -16,25 +15,69 @@ class IngresosScreen extends StatefulWidget {
 }
 
 class _IngresosScreenState extends State<IngresosScreen> {
-  final ingresoDao = IngresoDAO();
-  final equipoDao = EquipoDao();
-  final clienteDao = ClienteDao();
-  List<Map<String, dynamic>> ingresos = [];
-  String filtro = '';
+  String _filtro = '';
 
   @override
   void initState() {
     super.initState();
-    cargar();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargar();
+    });
   }
 
-  Future<void> cargar() async {
-    final data = await ingresoDao.listarIngresosDetallados();
-    setState(() => ingresos = data);
+  Future<void> _cargar() async {
+    await context.read<HelpdeskProvider>().recargarIngresos();
   }
+
+  // --- Helpers de Extracción Segura (Soporte Laravel API / SQLite Local) ---
+  int _getId(Map<String, dynamic> i) {
+    return int.tryParse((i['id_ingreso'] ?? i['id'] ?? '0').toString()) ?? 0;
+  }
+
+  String _getCliente(Map<String, dynamic> i) {
+    if (i['nombre_cliente'] != null) return i['nombre_cliente'].toString();
+    if (i['equipo'] != null && i['equipo']['cliente'] != null) {
+      return i['equipo']['cliente']['nombre'] ?? 'Sin cliente';
+    }
+    return 'Sin cliente';
+  }
+
+  String _getEquipoTexto(Map<String, dynamic> i) {
+    String tipo = 'Equipo';
+    String marca = '';
+    String modelo = '';
+
+    if (i['equipo'] != null) {
+      tipo = i['equipo']['tipo_equipo'] ?? tipo;
+      marca = i['equipo']['marca'] ?? '';
+      modelo = i['equipo']['modelo'] ?? '';
+    } else {
+      tipo = i['tipo_equipo'] ?? tipo;
+      marca = i['marca'] ?? '';
+      modelo = i['modelo'] ?? '';
+    }
+    return '$tipo • $marca $modelo'.trim();
+  }
+
+  String _getEstado(Map<String, dynamic> i) {
+    return i['estado'] ?? i['estado_ingreso'] ?? 'ingresado';
+  }
+
+  String _getAccesorios(Map<String, dynamic> i) {
+    return i['accesorios_entregados'] ?? i['accesorios'] ?? 'Sin accesorios';
+  }
+
+  String _getFotoPath(Map<String, dynamic> i) {
+    if (i['equipo'] != null && i['equipo']['foto_path'] != null) {
+      return i['equipo']['foto_path'].toString();
+    }
+    return i['foto_path']?.toString() ?? '';
+  }
+  // ------------------------------------------------------------------------
 
   Color _colorEstado(String estado) {
     switch (estado) {
+      case 'ingresado':
       case 'pendiente_diagnostico':
         return Colors.orangeAccent;
       case 'pendiente_aprobacion':
@@ -52,6 +95,7 @@ class _IngresosScreenState extends State<IngresosScreen> {
 
   String _textoEstado(String estado) {
     switch (estado) {
+      case 'ingresado':
       case 'pendiente_diagnostico':
         return 'Pendiente de diagnóstico';
       case 'pendiente_aprobacion':
@@ -69,11 +113,15 @@ class _IngresosScreenState extends State<IngresosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Escuchamos el estado global del taller reactivamente
+    final ingresos = context.watch<HelpdeskProvider>().ingresos;
+    final isLoading = context.watch<HelpdeskProvider>().loading;
+
     final ingresosFiltrados = ingresos.where((i) {
-      final texto = filtro.toLowerCase();
-      return i['nombre_cliente'].toString().toLowerCase().contains(texto) ||
-          i['marca'].toString().toLowerCase().contains(texto) ||
-          i['tipo_equipo'].toString().toLowerCase().contains(texto);
+      final texto = _filtro.toLowerCase();
+      final cliente = _getCliente(i).toLowerCase();
+      final equipo = _getEquipoTexto(i).toLowerCase();
+      return cliente.contains(texto) || equipo.contains(texto);
     }).toList();
 
     return LayoutPrincipal(
@@ -96,137 +144,137 @@ class _IngresosScreenState extends State<IngresosScreen> {
                 hintStyle: const TextStyle(color: Colors.white70),
               ),
               style: const TextStyle(color: Colors.white),
-              onChanged: (valor) => setState(() => filtro = valor),
+              onChanged: (valor) => setState(() => _filtro = valor),
             ),
           ),
 
-          // 📋 Lista de ingresos
+          // 📋 Lista de ingresos con soporte de actualización por arrastre
           Expanded(
-            child: ingresosFiltrados.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No hay ingresos registrados',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: ingresosFiltrados.length,
-                    itemBuilder: (context, index) {
-                      final i = ingresosFiltrados[index];
-                      final estado =
-                          i['estado_ingreso'] ?? 'pendiente_diagnostico';
-                      final fecha = i['fecha_ingreso'] != null
-                          ? DateFormat(
-                              'dd/MM/yyyy HH:mm',
-                            ).format(DateTime.parse(i['fecha_ingreso']))
-                          : 'Sin fecha';
-
-                      return Card(
-                        color: AppColors.fondo.withOpacity(0.9),
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: ListTile(
-                          onTap: () => _mostrarDetalles(context, i),
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.tealAccent.withOpacity(
-                              0.15,
-                            ),
-                            backgroundImage:
-                                (i['foto_path'] != null &&
-                                    (i['foto_path'] as String).isNotEmpty &&
-                                    File(i['foto_path']).existsSync())
-                                ? FileImage(File(i['foto_path']))
-                                : null,
-                            child:
-                                (i['foto_path'] == null ||
-                                    (i['foto_path'] as String).isEmpty)
-                                ? const Icon(
-                                    Icons.devices,
-                                    color: Colors.tealAccent,
-                                  )
-                                : null,
-                          ),
-                          title: Text(
-                            '${i['tipo_equipo'] ?? 'Equipo desconocido'} ${i['marca'] ?? ''}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+            child: RefreshIndicator(
+              onRefresh: _cargar,
+              color: Colors.tealAccent,
+              backgroundColor: AppColors.fondo,
+              child: isLoading && ingresos.isEmpty
+                  ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+                  : ingresosFiltrados.isEmpty
+                      ? Center(
+                          child: ListView(
+                            shrinkWrap: true,
                             children: [
-                              Text(
-                                'Cliente: ${i['nombre_cliente'] ?? 'Sin cliente'}',
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                              Text(
-                                'Motivo: ${i['observaciones'] ?? 'No especificado'}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.white54),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Fecha: $fecha',
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
+                              Center(
+                                child: const Text(
+                                  'No hay ingresos registrados',
+                                  style: TextStyle(color: Colors.white70),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Chip(
-                                label: Text(
-                                  _textoEstado(estado),
-                                  style: const TextStyle(
-                                    color: Colors.black,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                backgroundColor: _colorEstado(estado),
-                                visualDensity: VisualDensity.compact,
                               ),
                             ],
                           ),
-                          trailing: const Icon(
-                            Icons.chevron_right,
-                            color: Colors.white54,
-                            size: 28,
-                          ),
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: ingresosFiltrados.length,
+                          itemBuilder: (context, index) {
+                            final i = ingresosFiltrados[index];
+                            final estado = _getEstado(i);
+                            final clienteName = _getCliente(i);
+                            final equipoDesc = _getEquipoTexto(i);
+                            final pathFoto = _getFotoPath(i);
+
+                            final fecha = i['fecha_ingreso'] != null
+                                ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(i['fecha_ingreso']))
+                                : 'Sin fecha';
+
+                            return Card(
+                              color: AppColors.fondo.withOpacity(0.9),
+                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: ListTile(
+                                onTap: () => _mostrarDetalles(context, i),
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.tealAccent.withOpacity(0.15),
+                                  backgroundImage: (pathFoto.isNotEmpty && File(pathFoto).existsSync())
+                                      ? FileImage(File(pathFoto))
+                                      : null,
+                                  child: pathFoto.isEmpty || !File(pathFoto).existsSync()
+                                      ? const Icon(Icons.devices, color: Colors.tealAccent)
+                                      : null,
+                                ),
+                                title: Text(
+                                  equipoDesc,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Cliente: $clienteName',
+                                        style: const TextStyle(color: Colors.white70),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Motivo: ${i['observaciones'] ?? 'No especificado'}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Colors.white54),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Fecha: $fecha',
+                                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Chip(
+                                        label: Text(
+                                          _textoEstado(estado),
+                                          style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
+                                        backgroundColor: _colorEstado(estado),
+                                        visualDensity: VisualDensity.compact,
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                trailing: const Icon(Icons.chevron_right, color: Colors.white54, size: 28),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // 🧭 Modal de detalle
-  Future<void> _mostrarDetalles(
-    BuildContext context,
-    Map<String, dynamic> ingreso,
-  ) async {
-    final estado = ingreso['estado_ingreso'] ?? 'pendiente_diagnostico';
+  // 🧭 Modal de detalle interno
+  Future<void> _mostrarDetalles(BuildContext context, Map<String, dynamic> ingreso) async {
+    final estado = _getEstado(ingreso);
+    final clienteName = _getCliente(ingreso);
+    final equipoDesc = _getEquipoTexto(ingreso);
+    final pathFoto = _getFotoPath(ingreso);
+    final accesorios = _getAccesorios(ingreso);
+    final idIngreso = _getId(ingreso);
+
     final fecha = ingreso['fecha_ingreso'] != null
-        ? DateFormat(
-            'dd/MM/yyyy HH:mm',
-          ).format(DateTime.parse(ingreso['fecha_ingreso']))
+        ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(ingreso['fecha_ingreso']))
         : 'Sin fecha';
 
     await showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.fondo.withOpacity(0.95),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             Icon(Icons.receipt_long, color: Colors.tealAccent),
             SizedBox(width: 8),
             Text('Detalle del ingreso', style: TextStyle(color: Colors.white)),
@@ -239,76 +287,60 @@ class _IngresosScreenState extends State<IngresosScreen> {
               CircleAvatar(
                 radius: 45,
                 backgroundColor: Colors.tealAccent.withOpacity(0.15),
-                backgroundImage:
-                    (ingreso['foto_path'] != null &&
-                        (ingreso['foto_path'] as String).isNotEmpty &&
-                        File(ingreso['foto_path']).existsSync())
-                    ? FileImage(File(ingreso['foto_path']))
+                backgroundImage: (pathFoto.isNotEmpty && File(pathFoto).existsSync())
+                    ? FileImage(File(pathFoto))
                     : null,
-                child:
-                    (ingreso['foto_path'] == null ||
-                        (ingreso['foto_path'] as String).isEmpty)
-                    ? const Icon(
-                        Icons.devices,
-                        color: Colors.tealAccent,
-                        size: 40,
-                      )
+                child: pathFoto.isEmpty || !File(pathFoto).existsSync()
+                    ? const Icon(Icons.devices, color: Colors.tealAccent, size: 40)
                     : null,
               ),
               const SizedBox(height: 10),
               Text(
-                ingreso['nombre_cliente'] ?? 'Sin cliente',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                clienteName,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),
               Text(
-                '${ingreso['tipo_equipo']} ${ingreso['marca']}',
-                style: const TextStyle(color: Colors.white70),
+                equipoDesc,
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Chip(
                 label: Text(
                   _textoEstado(estado),
-                  style: const TextStyle(color: Colors.black, fontSize: 12),
+                  style: const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
                 backgroundColor: _colorEstado(estado),
               ),
-              const SizedBox(height: 12),
+              const Divider(color: Colors.white24, height: 24),
               _detalleCampo('Fecha de ingreso', fecha),
-              _detalleCampo(
-                'Motivo del ingreso',
-                ingreso['observaciones'] ?? 'Sin observaciones',
-              ),
-              _detalleCampo(
-                'Accesorios',
-                ingreso['accesorios'] ?? 'Sin accesorios',
-              ),
+              _detalleCampo('Motivo del ingreso', ingreso['observaciones'] ?? 'Sin observaciones'),
+              _detalleCampo('Accesorios', accesorios),
             ],
           ),
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
           TextButton.icon(
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.close, color: Colors.redAccent),
-            label: const Text('Cerrar'),
+            label: const Text('Cerrar', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.tealAccent.withOpacity(0.2),
               foregroundColor: Colors.tealAccent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             icon: const Icon(Icons.medical_services_outlined),
             label: const Text('Crear diagnóstico'),
             onPressed: () async {
               Navigator.pop(context);
-              await mostrarDiagnosticoModal(context, ingreso['id_ingreso']);
-              await cargar();
+              // Despliega el modal pasándole el ID de ingreso verificado
+              await mostrarDiagnosticoModal(context, idIngreso);
+              await _cargar();
             },
           ),
         ],
@@ -326,7 +358,7 @@ class _IngresosScreenState extends State<IngresosScreen> {
             flex: 3,
             child: Text(
               '$titulo:',
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(

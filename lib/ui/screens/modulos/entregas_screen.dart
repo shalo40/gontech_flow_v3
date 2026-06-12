@@ -325,7 +325,12 @@ class _EntregasScreenState extends State<EntregasScreen> {
                     label: const Text('Registrar Firma del Cliente'),
                     onPressed: () {
                       Navigator.pop(context);
-                      mostrarFirmaModal(context, entrega['id_entrega'], cargar);
+                      mostrarFirmaModal(
+                        context,
+                        entrega['id_entrega'],
+                        'entrega',
+                        cargar,
+                      );
                     },
                   ),
                 ),

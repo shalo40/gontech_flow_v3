@@ -9,8 +9,16 @@ class RemoteIngresoService {
       final dio = await ApiClient.instance.dio;
       final response = await dio.get('/ingresos');
       
-      if (response.statusCode == 200 && response.data['data'] != null) {
-        return response.data['data'] as List<dynamic>;
+      if (response.statusCode == 200) {
+        // Validación Robusta: 
+        // Si la respuesta ES directamente una lista (ej. [ {..}, {..} ])
+        if (response.data is List) {
+          return response.data as List<dynamic>;
+        } 
+        // Si la respuesta viene envuelta en el formato estándar (ej. { "data": [..] })
+        else if (response.data is Map<String, dynamic> && response.data['data'] != null) {
+          return response.data['data'] as List<dynamic>;
+        }
       }
       return [];
     } catch (e) {
@@ -28,8 +36,11 @@ class RemoteIngresoService {
         data: ingresoData,
       );
       
-      if (response.statusCode == 201 && response.data['data'] != null) {
-        return response.data['data']; 
+      if (response.statusCode == 201) {
+        if (response.data is Map<String, dynamic> && response.data['data'] != null) {
+          return response.data['data']; 
+        }
+        return response.data; // Retorno de fallback por si Laravel no envuelve
       }
       return null;
       
@@ -60,8 +71,11 @@ class RemoteIngresoService {
         data: ingresoData,
       );
       
-      if (response.statusCode == 200 && response.data['data'] != null) {
-        return response.data['data'];
+      if (response.statusCode == 200) {
+        if (response.data is Map<String, dynamic> && response.data['data'] != null) {
+          return response.data['data']; 
+        }
+        return response.data;
       }
       return null;
       
