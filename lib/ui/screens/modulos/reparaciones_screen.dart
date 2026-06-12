@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart'; // <-- Inyección del Provider
 import '../../../core/dao/reparacion_dao.dart';
 import '../../../core/dao/repuesto_dao.dart';
+import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
 import '../../reports/pdf_reparacion.dart';
@@ -20,7 +22,6 @@ class ReparacionesScreen extends StatefulWidget {
 
 class _ReparacionesScreenState extends State<ReparacionesScreen> {
   final dao = ReparacionDao();
-  List<Map<String, dynamic>> reparaciones = [];
   List<Map<String, dynamic>> _repuestosGlobal = [];
   String filtroEstado = 'todos';
   String criterioOrden = 'reciente';
@@ -30,18 +31,53 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
   @override
   void initState() {
     super.initState();
-    cargar();
-  }
-
-  Future<void> cargar() async {
-    final data = await dao.listarDetallado();
-    final repDao = RepuestoDao();
-    final repData = await repDao.listarDetallado();
-    setState(() {
-      reparaciones = data;
-      _repuestosGlobal = repData;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargar();
     });
   }
+
+  Future<void> _cargar() async {
+    // Recargamos las reparaciones desde el provider
+    await context.read<HelpdeskProvider>().recargarReparaciones();
+    // Mantenemos repuestos local hasta migrar su módulo
+    final repDao = RepuestoDao();
+    final repData = await repDao.listarDetallado();
+    if (mounted) {
+      setState(() {
+        _repuestosGlobal = repData;
+      });
+    }
+  }
+
+  // --- Helpers de compatibilidad API / Local ---
+  String _getNested(Map<String, dynamic> r, String localKey, List<String> apiPath, [String fallback = '']) {
+    if (r.containsKey(localKey) && r[localKey] != null && r[localKey].toString().isNotEmpty) {
+      return r[localKey].toString();
+    }
+    dynamic current = r;
+    for (final key in apiPath) {
+      if (current == null || current[key] == null) return fallback;
+      current = current[key];
+    }
+    return current.toString().isNotEmpty ? current.toString() : fallback;
+  }
+
+  int _getId(Map<String, dynamic> r) {
+    return int.tryParse((r['id_reparacion'] ?? r['id'] ?? '0').toString()) ?? 0;
+  }
+
+  int _getDiagnosticoId(Map<String, dynamic> r) {
+    return int.tryParse((r['id_diagnostico'] ?? r['diagnostico_id'] ?? '0').toString()) ?? 0;
+  }
+  
+  int _getIngresoId(Map<String, dynamic> r) {
+    if (r['id_ingreso'] != null) return int.tryParse(r['id_ingreso'].toString()) ?? 0;
+    if (r['diagnostico'] != null && r['diagnostico']['ingreso_id'] != null) {
+      return int.tryParse(r['diagnostico']['ingreso_id'].toString()) ?? 0;
+    }
+    return 0;
+  }
+  // ---------------------------------------------
 
   Color _colorEstado(String estado) {
     switch (estado) {
@@ -65,11 +101,11 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _filtrarYOrdenar() {
+  List<Map<String, dynamic>> _filtrarYOrdenar(List<Map<String, dynamic>> reparaciones) {
     var lista = reparaciones.where((r) {
       final estado = r['estado'] ?? '';
-      final cliente = (r['cliente'] ?? '').toString().toLowerCase();
-      final marca = (r['marca'] ?? '').toString().toLowerCase();
+      final cliente = _getNested(r, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre']).toLowerCase();
+      final marca = _getNested(r, 'marca', ['diagnostico', 'ingreso', 'equipo', 'marca']).toLowerCase();
       final query = busqueda.toLowerCase();
 
       final coincideBusqueda =
@@ -81,14 +117,12 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
 
     if (criterioOrden == 'nombre') {
       lista.sort(
-        (a, b) => (a['cliente'] ?? '').toString().compareTo(
-          (b['cliente'] ?? '').toString(),
-        ),
+        (a, b) => _getNested(a, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre'])
+            .compareTo(_getNested(b, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre'])),
       );
     } else {
       lista.sort(
-        (a, b) =>
-            (b['id_reparacion'] as int).compareTo(a['id_reparacion'] as int),
+        (a, b) => _getId(b).compareTo(_getId(a)),
       );
     }
 
@@ -97,7 +131,9 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lista = _filtrarYOrdenar();
+    final provider = context.watch<HelpdeskProvider>();
+    final isLoading = provider.loading;
+    final lista = _filtrarYOrdenar(provider.reparaciones);
 
     return LayoutPrincipal(
       titulo: 'Reparaciones',
@@ -168,23 +204,27 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
 
             // 📋 Lista de reparaciones
             Expanded(
-              child: lista.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No hay reparaciones registradas.',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: cargar,
-                      child: ListView.builder(
-                        itemCount: lista.length,
-                        itemBuilder: (context, index) {
-                          final r = lista[index];
-                          return _cardReparacion(r);
-                        },
-                      ),
-                    ),
+              child: isLoading && lista.isEmpty
+                  ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+                  : lista.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No hay reparaciones registradas.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _cargar,
+                          color: Colors.tealAccent,
+                          backgroundColor: AppColors.fondo,
+                          child: ListView.builder(
+                            itemCount: lista.length,
+                            itemBuilder: (context, index) {
+                              final r = lista[index];
+                              return _cardReparacion(r);
+                            },
+                          ),
+                        ),
             ),
           ],
         ),
@@ -219,14 +259,22 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
 
   Widget _cardReparacion(Map<String, dynamic> r) {
     final estado = r['estado'] ?? 'pendiente';
-    final fechaInicio = r['fecha_inicio'] != null
-        ? formatoFecha.format(DateTime.parse(r['fecha_inicio']))
+    final fechaInicioRaw = r['fecha_inicio'];
+    final fechaFinRaw = r['fecha_fin'];
+
+    final fechaInicio = fechaInicioRaw != null
+        ? formatoFecha.format(DateTime.parse(fechaInicioRaw.toString()))
         : '-';
-    final fechaFin = r['fecha_fin'] != null
-        ? formatoFecha.format(DateTime.parse(r['fecha_fin']))
+    final fechaFin = fechaFinRaw != null
+        ? formatoFecha.format(DateTime.parse(fechaFinRaw.toString()))
         : '-';
 
-    final repuestosRelacionados = _repuestosGlobal.where((rep) => rep['id_diagnostico'] == r['id_diagnostico']).toList();
+    final cliente = _getNested(r, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre'], 'Cliente Desconocido');
+    final marca = _getNested(r, 'marca', ['diagnostico', 'ingreso', 'equipo', 'marca']);
+    final falla = _getNested(r, 'descripcion_falla', ['diagnostico', 'descripcion_falla']);
+    final idDiagnostico = _getDiagnosticoId(r);
+
+    final repuestosRelacionados = _repuestosGlobal.where((rep) => rep['id_diagnostico'] == idDiagnostico).toList();
     final int countRepuestos = repuestosRelacionados.length;
     final double costoRepuestos = repuestosRelacionados.fold(0.0, (sum, rep) => sum + (rep['costo'] as num? ?? 0).toDouble());
 
@@ -238,7 +286,7 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(
-        '${r['cliente'] ?? 'Cliente'} - ${r['marca'] ?? ''}',
+        '$cliente - $marca',
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
@@ -260,7 +308,7 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Diagnóstico: ${r['descripcion_falla'] ?? ''}',
+                'Diagnóstico: $falla',
                 style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 4),
@@ -313,6 +361,11 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
 
   Future<void> _mostrarOpciones(Map<String, dynamic> r) async {
     final estado = r['estado'] ?? 'pendiente';
+    final idReparacion = _getId(r);
+    final idDiagnostico = _getDiagnosticoId(r);
+    final idIngreso = _getIngresoId(r);
+    final provider = context.read<HelpdeskProvider>();
+
     showModalBottomSheet(
       backgroundColor: AppColors.fondo.withOpacity(0.97),
       shape: const RoundedRectangleBorder(
@@ -377,7 +430,7 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => RepuestosScreen(idDiagnosticoFiltro: r['id_diagnostico']),
+                        builder: (_) => RepuestosScreen(idDiagnosticoFiltro: idDiagnostico),
                       ),
                     );
                   },
@@ -394,12 +447,8 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () async {
-                    await dao.actualizarEstado(
-                      r['id_reparacion'],
-                      'en_proceso',
-                    );
                     Navigator.pop(context);
-                    await cargar();
+                    await provider.actualizarReparacion(idReparacion, {'estado': 'en_proceso'});
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -422,12 +471,8 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () async {
-                    await dao.actualizarEstado(
-                      r['id_reparacion'],
-                      'finalizada',
-                    );
                     Navigator.pop(context);
-                    await cargar();
+                    await provider.actualizarReparacion(idReparacion, {'estado': 'finalizada'});
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -458,22 +503,22 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                     ),
                     onTap: () async {
                       Navigator.pop(context);
-                      // TODO: Integrar verificación de pagos en el futuro
                       
                       final entregaDao = EntregaDao();
                       final ingresoDao = IngresoDAO();
                       
+                      final cliente = _getNested(r, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre']);
                       final nuevaEntrega = Entrega(
-                        id_reparacion: r['id_reparacion'],
-                        nombre_receptor: r['cliente'],
+                        id_reparacion: idReparacion,
+                        nombre_receptor: cliente,
                         estado: 'pendiente',
                       );
                       
                       await entregaDao.insertar(nuevaEntrega);
-                      await dao.actualizarEstado(r['id_reparacion'], 'entregada');
-                      await ingresoDao.actualizarEstadoDesdeReparacion(r['id_ingreso'] ?? 0, 'finalizado');
+                      await provider.actualizarReparacion(idReparacion, {'estado': 'entregada'});
+                      await ingresoDao.actualizarEstadoDesdeReparacion(idIngreso, 'finalizado');
                       
-                      await cargar();
+                      await provider.recargarTodo();
                       
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -504,7 +549,7 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                       final repuestoDao = RepuestoDao();
                       final repuestos = await repuestoDao.listarDetallado();
                       final repuestosRep = repuestos.where(
-                        (rep) => rep['id_diagnostico'] == r['id_diagnostico'],
+                        (rep) => rep['id_diagnostico'] == idDiagnostico,
                       ).toList();
 
                       final file = await PdfReparacion.generar(
@@ -536,9 +581,9 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () async {
-                    await dao.eliminar(r['id_reparacion']);
                     Navigator.pop(context);
-                    await cargar();
+                    await dao.eliminar(idReparacion); // Usando DAO local para borrado hasta migrar la ruta
+                    await provider.recargarReparaciones();
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(

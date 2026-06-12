@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart'; // <-- Inyección del Provider
 import '../../../core/dao/presupuesto_dao.dart';
+import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
 
@@ -12,20 +14,50 @@ class PresupuestosScreen extends StatefulWidget {
 }
 
 class _PresupuestosScreenState extends State<PresupuestosScreen> {
-  final presupuestoDao = PresupuestoDao();
-  List<Map<String, dynamic>> presupuestos = [];
+  final presupuestoDao = PresupuestoDao(); // Lo mantenemos temporalmente para las actualizaciones de estado locales
   String filtroEstado = 'todos';
 
   @override
   void initState() {
     super.initState();
-    cargar();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargar();
+    });
   }
 
-  Future<void> cargar() async {
-    final data = await presupuestoDao.listarDetallado();
-    setState(() => presupuestos = data);
+  Future<void> _cargar() async {
+    await context.read<HelpdeskProvider>().recargarPresupuestos();
   }
+
+  // --- Helpers de compatibilidad API / Local ---
+  String _getCliente(Map<String, dynamic> p) {
+    if (p.containsKey('cliente') && p['cliente'] != null && p['cliente'] is String) return p['cliente'];
+    if (p['diagnostico'] != null && p['diagnostico']['ingreso'] != null && p['diagnostico']['ingreso']['equipo'] != null && p['diagnostico']['ingreso']['equipo']['cliente'] != null) {
+      return p['diagnostico']['ingreso']['equipo']['cliente']['nombre'] ?? 'Cliente desconocido';
+    }
+    return 'Cliente desconocido';
+  }
+
+  String _getMarca(Map<String, dynamic> p) {
+    if (p.containsKey('marca') && p['marca'] != null) return p['marca'];
+    if (p['diagnostico'] != null && p['diagnostico']['ingreso'] != null && p['diagnostico']['ingreso']['equipo'] != null) {
+      return p['diagnostico']['ingreso']['equipo']['marca'] ?? 'Sin marca';
+    }
+    return 'Sin marca';
+  }
+
+  String _getTipo(Map<String, dynamic> p) {
+    if (p.containsKey('tipo_equipo') && p['tipo_equipo'] != null) return p['tipo_equipo'];
+    if (p['diagnostico'] != null && p['diagnostico']['ingreso'] != null && p['diagnostico']['ingreso']['equipo'] != null) {
+      return p['diagnostico']['ingreso']['equipo']['tipo_equipo'] ?? '';
+    }
+    return '';
+  }
+
+  int _getId(Map<String, dynamic> p) {
+    return int.tryParse((p['id_presupuesto'] ?? p['id'] ?? '0').toString()) ?? 0;
+  }
+  // ---------------------------------------------
 
   Color _colorEstado(String estado) {
     switch (estado) {
@@ -62,10 +94,14 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Aplicar filtro
+    final provider = context.watch<HelpdeskProvider>();
+    final presupuestos = provider.presupuestos;
+    final isLoading = provider.loading;
+
+    // Aplicar filtro en tiempo real
     final filtrados = presupuestos.where((p) {
       if (filtroEstado == 'todos') return true;
-      return p['estado'] == filtroEstado;
+      return (p['estado'] ?? 'pendiente') == filtroEstado;
     }).toList();
 
     return LayoutPrincipal(
@@ -80,11 +116,7 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
               child: Row(
                 children: [
                   _chipFiltro('todos', 'Todos', Icons.list),
-                  _chipFiltro(
-                    'pendiente',
-                    'Pendientes',
-                    Icons.hourglass_bottom,
-                  ),
+                  _chipFiltro('pendiente', 'Pendientes', Icons.hourglass_bottom),
                   _chipFiltro('autorizado', 'Autorizados', Icons.check_circle),
                   _chipFiltro('rechazado', 'Rechazados', Icons.cancel),
                 ],
@@ -94,185 +126,166 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
 
           // 📋 Listado de presupuestos
           Expanded(
-            child: filtrados.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No hay presupuestos registrados',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  )
-                : RefreshIndicator(
-                    color: Colors.tealAccent,
-                    onRefresh: cargar,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: filtrados.length,
-                      itemBuilder: (context, index) {
-                        final p = filtrados[index];
-                        final estado = p['estado'] ?? 'pendiente';
-                        final fecha = p['fecha_creacion'] != null
-                            ? DateFormat(
-                                'dd/MM/yyyy HH:mm',
-                              ).format(DateTime.parse(p['fecha_creacion']))
-                            : 'Sin fecha';
+            child: isLoading && filtrados.isEmpty
+                ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+                : filtrados.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No hay presupuestos registrados',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      )
+                    : RefreshIndicator(
+                        color: Colors.tealAccent,
+                        onRefresh: _cargar,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: filtrados.length,
+                          itemBuilder: (context, index) {
+                            final p = filtrados[index];
+                            final estado = p['estado'] ?? 'pendiente';
+                            final fechaRaw = p['fecha_creacion'] ?? p['created_at'];
+                            final fecha = fechaRaw != null
+                                ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(fechaRaw.toString()))
+                                : 'Sin fecha';
 
-                        return Card(
-                          color: AppColors.fondo.withOpacity(0.95),
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: ExpansionTile(
-                            leading: Icon(
-                              _iconoEstado(estado),
-                              color: _colorEstado(estado),
-                              size: 34,
-                            ),
-                            title: Text(
-                              p['cliente'] ?? 'Cliente desconocido',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '${p['marca'] ?? 'Sin marca'} (${p['tipo_equipo'] ?? ''})\n${_textoEstado(estado)}',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                              ),
-                            ),
-                            iconColor: Colors.tealAccent,
-                            collapsedIconColor: Colors.white70,
-                            childrenPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            children: [
-                              _detalleCampo(
-                                'Trabajo solicitado',
-                                p['descripcion'],
-                              ),
-                              _detalleCampo(
-                                'Total estimado',
-                                '\$${p['total']?.toStringAsFixed(0) ?? '0'} CLP',
-                              ),
-                              _detalleCampo('Fecha de creación', fecha),
-                              _detalleCampo(
-                                'Equipo asociado',
-                                '${p['tipo_equipo']} - ${p['marca']}',
-                              ),
-                              const SizedBox(height: 8),
+                            final cliente = _getCliente(p);
+                            final marca = _getMarca(p);
+                            final tipo = _getTipo(p);
+                            final idPresupuesto = _getId(p);
 
-                              // Estado visual
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Chip(
-                                  backgroundColor: _colorEstado(estado),
-                                  label: Text(
-                                    _textoEstado(estado),
-                                    style: const TextStyle(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                            return Card(
+                              color: AppColors.fondo.withOpacity(0.95),
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: ExpansionTile(
+                                leading: Icon(
+                                  _iconoEstado(estado),
+                                  color: _colorEstado(estado),
+                                  size: 34,
+                                ),
+                                title: Text(
+                                  cliente,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              ),
-
-                              const SizedBox(height: 12),
-
-                              // 🧩 Acciones
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                                subtitle: Text(
+                                  '$marca ($tipo)\n${_textoEstado(estado)}',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                iconColor: Colors.tealAccent,
+                                collapsedIconColor: Colors.white70,
+                                childrenPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
                                 children: [
-                                  TextButton.icon(
-                                    onPressed: () =>
-                                        _mostrarDetalles(context, p),
-                                    icon: const Icon(
-                                      Icons.visibility_outlined,
-                                      color: Colors.tealAccent,
-                                    ),
-                                    label: const Text(
-                                      'Ver detalle',
-                                      style: TextStyle(
-                                        color: Colors.tealAccent,
-                                        fontWeight: FontWeight.bold,
+                                  _detalleCampo('Trabajo solicitado', p['descripcion']),
+                                  _detalleCampo('Total estimado', '\$${p['total']?.toString() ?? '0'} CLP'),
+                                  _detalleCampo('Fecha de creación', fecha),
+                                  _detalleCampo('Equipo asociado', '$tipo - $marca'),
+                                  const SizedBox(height: 8),
+
+                                  // Estado visual
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Chip(
+                                      backgroundColor: _colorEstado(estado),
+                                      label: Text(
+                                        _textoEstado(estado),
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                  PopupMenuButton<String>(
-                                    color: AppColors.fondo,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    onSelected: (opcion) async {
-                                      if (opcion == 'autorizar' ||
-                                          opcion == 'rechazar') {
-                                        final nuevoEstado =
-                                            opcion == 'autorizar'
-                                            ? 'autorizado'
-                                            : 'rechazado';
-                                        await presupuestoDao.actualizarEstado(
-                                          p['id_presupuesto'],
-                                          nuevoEstado,
-                                        );
-                                        await cargar();
 
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                nuevoEstado == 'autorizado'
-                                                    ? '✅ Presupuesto autorizado'
-                                                    : '❌ Presupuesto rechazado',
-                                              ),
-                                              behavior:
-                                                  SnackBarBehavior.floating,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'autorizar',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.check_circle,
-                                              color: Colors.greenAccent,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text('Autorizar'),
-                                          ],
+                                  const SizedBox(height: 12),
+
+                                  // 🧩 Acciones
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      TextButton.icon(
+                                        onPressed: () => _mostrarDetalles(context, p, cliente, marca, tipo, estado),
+                                        icon: const Icon(
+                                          Icons.visibility_outlined,
+                                          color: Colors.tealAccent,
+                                        ),
+                                        label: const Text(
+                                          'Ver detalle',
+                                          style: TextStyle(
+                                            color: Colors.tealAccent,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ),
-                                      const PopupMenuItem(
-                                        value: 'rechazar',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.cancel,
-                                              color: Colors.redAccent,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text('Rechazar'),
-                                          ],
+                                      PopupMenuButton<String>(
+                                        color: AppColors.fondo,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
                                         ),
+                                        onSelected: (opcion) async {
+                                          if (opcion == 'autorizar' || opcion == 'rechazar') {
+                                            final nuevoEstado = opcion == 'autorizar' ? 'autorizado' : 'rechazado';
+                                            
+                                            // Actualización local temporal hasta integrar el endpoint de update
+                                            await presupuestoDao.actualizarEstado(idPresupuesto, nuevoEstado);
+                                            await _cargar();
+
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    nuevoEstado == 'autorizado'
+                                                        ? '✅ Presupuesto autorizado'
+                                                        : '❌ Presupuesto rechazado',
+                                                  ),
+                                                  behavior: SnackBarBehavior.floating,
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(
+                                            value: 'autorizar',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.check_circle, color: Colors.greenAccent),
+                                                SizedBox(width: 8),
+                                                Text('Autorizar'),
+                                              ],
+                                            ),
+                                          ),
+                                          const PopupMenuItem(
+                                            value: 'rechazar',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.cancel, color: Colors.redAccent),
+                                                SizedBox(width: 8),
+                                                Text('Rechazar'),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                            );
+                          },
+                        ),
+                      ),
           ),
         ],
       ),
@@ -338,7 +351,11 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
 
   Future<void> _mostrarDetalles(
     BuildContext context,
-    Map<String, dynamic> presupuesto,
+    Map<String, dynamic> p,
+    String cliente,
+    String marca,
+    String tipo,
+    String estado,
   ) async {
     await showDialog(
       context: context,
@@ -358,23 +375,15 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _detalleCampo('Cliente', presupuesto['cliente'] ?? 'N/D'),
-            _detalleCampo(
-              'Equipo',
-              '${presupuesto['tipo_equipo']} ${presupuesto['marca']}',
-            ),
-            _detalleCampo('Descripción', presupuesto['descripcion'] ?? ''),
-            _detalleCampo(
-              'Total estimado',
-              '\$${presupuesto['total']?.toStringAsFixed(0) ?? '0'} CLP',
-            ),
+            _detalleCampo('Cliente', cliente),
+            _detalleCampo('Equipo', '$tipo $marca'),
+            _detalleCampo('Descripción', p['descripcion'] ?? ''),
+            _detalleCampo('Total estimado', '\$${p['total']?.toString() ?? '0'} CLP'),
             const SizedBox(height: 10),
             Chip(
-              backgroundColor: _colorEstado(
-                presupuesto['estado'] ?? 'pendiente',
-              ),
+              backgroundColor: _colorEstado(estado),
               label: Text(
-                _textoEstado(presupuesto['estado'] ?? 'pendiente'),
+                _textoEstado(estado),
                 style: const TextStyle(
                   color: Colors.black,
                   fontWeight: FontWeight.bold,

@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // <-- Inyectamos Provider
 import 'package:image_picker/image_picker.dart';
-import '../../../core/dao/equipo_dao.dart';
 import '../../../core/models/equipo.dart';
 import '../../../core/providers/helpdesk_provider.dart'; // <-- Importamos tu Provider
 import '../../theme/app_colors.dart';

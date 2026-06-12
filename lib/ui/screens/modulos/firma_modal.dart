@@ -1,9 +1,10 @@
-import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
-import 'package:path_provider/path_provider.dart';
-import '../../../core/dao/entrega_dao.dart';
+import '../../../core/providers/helpdesk_provider.dart';
+import '../../theme/app_colors.dart';
 
 Future<void> mostrarFirmaModal(
   BuildContext context,
@@ -15,8 +16,6 @@ Future<void> mostrarFirmaModal(
     penColor: Colors.tealAccent,
     exportBackgroundColor: Colors.black,
   );
-
-  final entregaDao = EntregaDao();
 
   await showDialog(
     context: context,
@@ -96,33 +95,54 @@ Future<void> mostrarFirmaModal(
                           ),
                           onPressed: () async {
                             if (signatureController.isNotEmpty) {
-                              final Uint8List? data = await signatureController
-                                  .toPngBytes();
+                              final Uint8List? data = await signatureController.toPngBytes();
+                              
                               if (data != null) {
-                                final dir =
-                                    await getApplicationDocumentsDirectory();
-                                final filePath =
-                                    '${dir.path}/firma_${DateTime.now().millisecondsSinceEpoch}.png';
-                                final file = File(filePath);
-                                await file.writeAsBytes(data);
+                                // 1. Convertimos los bytes del lienzo a un string Base64
+                                final String base64Firma = 'data:image/png;base64,${base64Encode(data)}';
 
-                                await entregaDao.actualizarFirma(
-                                  idEntrega,
-                                  filePath,
-                                );
+                                // 2. Empaquetamos la actualización
+                                final actualizacionEntrega = {
+                                  'firma_base64': base64Firma,
+                                  'estado': 'entregado',
+                                };
 
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                  onGuardado();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        '✍️ Firma guardada correctamente',
+                                try {
+                                  // 3. Enviamos la carga útil al Cerebro
+                                  final provider = context.read<HelpdeskProvider>();
+                                  await provider.actualizarEntrega(idEntrega, actualizacionEntrega);
+
+                                  if (context.mounted) {
+                                    Navigator.pop(context);
+                                    onGuardado();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          '✍️ Firma guardada y entrega finalizada con éxito',
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
                                       ),
-                                    ),
-                                  );
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('❌ Error al guardar firma: $e'),
+                                        backgroundColor: Colors.redAccent,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
                                 }
                               }
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('El lienzo de firma está vacío.'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
                             }
                           },
                         ),

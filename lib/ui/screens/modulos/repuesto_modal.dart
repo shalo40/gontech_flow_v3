@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../../core/dao/repuesto_dao.dart';
-import '../../../core/models/repuesto.dart';
+import 'package:provider/provider.dart'; // <-- Inyección del Provider
+import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
 import '../../theme/app_colors.dart';
 
 Future<void> mostrarRepuestoModal({
   required BuildContext context,
   required int idReferencia,
-  required String origen, // 'diagnostico' o 'reparacion'
+  required String origen, // 'diagnostico', 'presupuesto' o 'reparacion'
 }) async {
-  final dao = RepuestoDao();
   final nombreCtrl = TextEditingController();
   final proveedorCtrl = TextEditingController();
   final cantidadCtrl = TextEditingController(text: '1');
@@ -84,7 +83,7 @@ Future<void> mostrarRepuestoModal({
             icon: const Icon(Icons.save),
             label: const Text('Guardar'),
             onPressed: () async {
-              if (nombreCtrl.text.isEmpty) {
+              if (nombreCtrl.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Debes ingresar al menos el nombre.'),
@@ -94,36 +93,48 @@ Future<void> mostrarRepuestoModal({
                 return;
               }
 
-              final repuesto = Repuesto(
-                nombre: nombreCtrl.text,
-                proveedor: proveedorCtrl.text,
-                cantidad: int.tryParse(cantidadCtrl.text) ?? 1,
-                costoUnitario: double.tryParse(costoCtrl.text) ?? 0.0,
-                estado: origen == 'diagnostico' ? 'sugerido' : 'instalado',
-                origen: origen,
-                idDiagnostico: origen == 'diagnostico' ? idReferencia : null,
-                idPresupuesto: null,
-              );
+              // Empaquetamos exactamente como lo espera Laravel
+              final repuestoParaLaravel = {
+                'nombre': nombreCtrl.text.trim(),
+                'proveedor': proveedorCtrl.text.trim(),
+                'cantidad': int.tryParse(cantidadCtrl.text) ?? 1,
+                'costo_unitario': double.tryParse(costoCtrl.text) ?? 0.0,
+                'estado': origen == 'diagnostico' ? 'sugerido' : 'instalado',
+                'origen': origen,
+                // Asignamos la llave foránea correcta según el flujo
+                'diagnostico_id': origen == 'diagnostico' ? idReferencia : null,
+                'presupuesto_id': origen == 'presupuesto' ? idReferencia : null,
+                'reparacion_id':  origen == 'reparacion'  ? idReferencia : null,
+                'fecha_registro': DateTime.now().toIso8601String(),
+              };
 
-              if (origen == 'reparacion') {
-                // si en tu modelo agregas id_reparacion
-                repuesto.idPresupuesto = idReferencia;
-              }
+              try {
+                final provider = context.read<HelpdeskProvider>();
+                final exito = await provider.agregarRepuesto(repuestoParaLaravel);
 
-              await dao.insertar(repuesto);
-
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      origen == 'diagnostico'
-                          ? '🔧 Repuesto sugerido agregado'
-                          : '🧩 Repuesto instalado registrado',
+                if (exito && context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        origen == 'diagnostico'
+                            ? '🔧 Repuesto sugerido agregado'
+                            : '🧩 Repuesto instalado registrado',
+                      ),
+                      behavior: SnackBarBehavior.floating,
                     ),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Error al guardar: $e'),
+                      backgroundColor: Colors.redAccent,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               }
             },
           ),

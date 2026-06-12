@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../core/dao/reparacion_dao.dart';
-import '../../../core/models/reparacion.dart';
+import 'package:provider/provider.dart'; // <-- Inyección del Provider
+import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
 import '../../theme/app_colors.dart';
 
 Future<void> mostrarReparacionModal(
   BuildContext context,
   int idDiagnostico,
 ) async {
-  final dao = ReparacionDao();
-
   final descripcionCtrl = TextEditingController();
   final notasCtrl = TextEditingController();
   String estado = 'pendiente';
@@ -50,7 +48,7 @@ Future<void> mostrarReparacionModal(
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    initialValue: tecnicoSeleccionado,
+                    value: tecnicoSeleccionado,
                     dropdownColor: AppColors.fondo,
                     decoration: InputDecoration(
                       prefixIcon: const Icon(
@@ -78,7 +76,7 @@ Future<void> mostrarReparacionModal(
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: estado,
+                    value: estado,
                     dropdownColor: AppColors.fondo,
                     decoration: InputDecoration(
                       prefixIcon: const Icon(
@@ -152,20 +150,21 @@ Future<void> mostrarReparacionModal(
                     return;
                   }
 
-                  final reparacion = Reparacion(
-                    idDiagnostico: idDiagnostico,
-                    idTecnico: tecnicoSeleccionado,
-                    descripcion: descripcionCtrl.text,
-                    fechaInicio: DateTime.now().toIso8601String(),
-                    fechaFin: null,
-                    estado: estado,
-                    notas: notasCtrl.text,
-                  );
+                  // Empaquetamos los datos con los nombres exactos de la BD
+                  final reparacionParaLaravel = {
+                    'diagnostico_id': idDiagnostico,
+                    'tecnico_id': tecnicoSeleccionado,
+                    'descripcion': descripcionCtrl.text.trim(),
+                    'fecha_inicio': DateTime.now().toIso8601String(),
+                    'estado': estado,
+                    'notas': notasCtrl.text.trim(),
+                  };
 
                   try {
-                    await dao.insertar(reparacion);
+                    final provider = context.read<HelpdeskProvider>();
+                    final exito = await provider.agregarReparacion(reparacionParaLaravel);
 
-                    if (context.mounted) {
+                    if (exito && context.mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(

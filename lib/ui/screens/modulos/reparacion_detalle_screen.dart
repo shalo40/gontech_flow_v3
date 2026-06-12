@@ -15,9 +15,8 @@ class ReparacionDetalleScreen extends StatefulWidget {
 }
 
 class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
-  final dao = RepuestoDao();
+  final dao = RepuestoDao(); // Mantenemos el DAO para Repuestos hasta su respectiva migración
   List<Map<String, dynamic>> repuestos = [];
-  final formato = DateFormat('dd/MM/yyyy HH:mm');
 
   @override
   void initState() {
@@ -25,19 +24,54 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
     cargar();
   }
 
+  // --- Helpers de compatibilidad API / Local ---
+  String _getNested(String localKey, List<String> apiPath, [String fallback = '-']) {
+    final r = widget.reparacion;
+    if (r.containsKey(localKey) && r[localKey] != null && r[localKey].toString().isNotEmpty) {
+      return r[localKey].toString();
+    }
+    dynamic current = r;
+    for (final key in apiPath) {
+      if (current == null || current[key] == null) return fallback;
+      current = current[key];
+    }
+    return current.toString().isNotEmpty ? current.toString() : fallback;
+  }
+
+  int _getDiagnosticoId() {
+    return int.tryParse((widget.reparacion['id_diagnostico'] ?? widget.reparacion['diagnostico_id'] ?? '0').toString()) ?? 0;
+  }
+
+  int _getReparacionId() {
+    return int.tryParse((widget.reparacion['id_reparacion'] ?? widget.reparacion['id'] ?? '0').toString()) ?? 0;
+  }
+
+  String _formatearFecha(String? fechaRaw) {
+    if (fechaRaw == null || fechaRaw.toString().trim().isEmpty) return '-';
+    try {
+      return DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(fechaRaw.toString()));
+    } catch (_) {
+      return fechaRaw.toString();
+    }
+  }
+  // ---------------------------------------------
+
   Future<void> cargar() async {
-    final data = await dao.listarPorDiagnostico(
-      widget.reparacion['id_diagnostico'],
-    );
-    setState(() => repuestos = data);
+    final data = await dao.listarPorDiagnostico(_getDiagnosticoId());
+    if (mounted) {
+      setState(() => repuestos = data);
+    }
   }
 
   Color _colorEstado(String estado) {
-    switch (estado) {
+    switch (estado.toLowerCase()) {
       case 'instalado':
+      case 'finalizada':
         return Colors.greenAccent;
       case 'rechazado':
         return Colors.redAccent;
+      case 'en_proceso':
+        return Colors.blueAccent;
       default:
         return Colors.amberAccent;
     }
@@ -46,12 +80,20 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
   @override
   Widget build(BuildContext context) {
     final r = widget.reparacion;
+    
+    // Extracción segura de datos
+    final cliente = _getNested('cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre'], 'Sin cliente');
+    final marca = _getNested('marca', ['diagnostico', 'ingreso', 'equipo', 'marca'], '');
+    final modelo = _getNested('modelo', ['diagnostico', 'ingreso', 'equipo', 'modelo'], '');
+    final falla = _getNested('descripcion_falla', ['diagnostico', 'descripcion_falla']);
+    final estado = (r['estado'] ?? 'pendiente').toString();
 
     return Scaffold(
       backgroundColor: AppColors.fondo,
       appBar: AppBar(
         backgroundColor: AppColors.fondo.withOpacity(0.95),
-        title: const Text('Detalle de reparación'),
+        title: const Text('Detalle de reparación', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white70),
@@ -67,7 +109,7 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
         onPressed: () async {
           await mostrarRepuestoModal(
             context: context,
-            idReferencia: r['id_reparacion'],
+            idReferencia: _getReparacionId(),
             origen: 'reparacion',
           );
           await cargar();
@@ -89,7 +131,7 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      r['cliente'] ?? 'Sin cliente',
+                      cliente,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -98,12 +140,12 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${r['marca'] ?? ''} ${r['modelo'] ?? ''}',
+                      '$marca $modelo',
                       style: const TextStyle(color: Colors.white70),
                     ),
                     const Divider(height: 20, color: Colors.white24),
                     Text(
-                      'Diagnóstico: ${r['descripcion_falla'] ?? '-'}',
+                      'Diagnóstico: $falla',
                       style: const TextStyle(color: Colors.white70),
                     ),
                     const SizedBox(height: 4),
@@ -118,16 +160,16 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Estado: ${(r['estado'] ?? '').toUpperCase()}',
-                      style: TextStyle(color: _colorEstado(r['estado'] ?? '')),
+                      'Estado: ${estado.toUpperCase()}',
+                      style: TextStyle(color: _colorEstado(estado), fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Inicio: ${r['fecha_inicio'] ?? '-'}',
+                      'Inicio: ${_formatearFecha(r['fecha_inicio'])}',
                       style: const TextStyle(color: Colors.white54),
                     ),
                     Text(
-                      'Fin: ${r['fecha_fin'] ?? '-'}',
+                      'Fin: ${_formatearFecha(r['fecha_fin'])}',
                       style: const TextStyle(color: Colors.white54),
                     ),
                   ],
@@ -160,7 +202,7 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
                 ),
               )
             else
-              Column(children: repuestos.map((r) => _cardRepuesto(r)).toList()),
+              Column(children: repuestos.map((rep) => _cardRepuesto(rep)).toList()),
           ],
         ),
       ),
@@ -203,7 +245,7 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
                 children: [
                   Icon(Icons.check_circle, color: Colors.greenAccent),
                   SizedBox(width: 8),
-                  Text('Marcar instalado'),
+                  Text('Marcar instalado', style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),
@@ -213,7 +255,7 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
                 children: [
                   Icon(Icons.cancel, color: Colors.redAccent),
                   SizedBox(width: 8),
-                  Text('Marcar rechazado'),
+                  Text('Marcar rechazado', style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),
@@ -223,7 +265,7 @@ class _ReparacionDetalleScreenState extends State<ReparacionDetalleScreen> {
                 children: [
                   Icon(Icons.delete_forever, color: Colors.redAccent),
                   SizedBox(width: 8),
-                  Text('Eliminar'),
+                  Text('Eliminar', style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),

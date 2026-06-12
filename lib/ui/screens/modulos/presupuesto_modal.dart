@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../core/models/presupuesto.dart';
-import '../../../core/dao/presupuesto_dao.dart';
+import 'package:provider/provider.dart'; // <-- Inyección del Provider
+import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
 import '../../theme/app_colors.dart';
 
 Future<void> mostrarPresupuestoModal(
   BuildContext context,
   int idDiagnostico,
 ) async {
-  final dao = PresupuestoDao();
   final descripcionCtrl = TextEditingController();
   final totalCtrl = TextEditingController();
 
@@ -247,24 +246,38 @@ Future<void> mostrarPresupuestoModal(
                       ? double.tryParse(totalCtrl.text) ?? total
                       : total;
 
-                  final presupuesto = Presupuesto(
-                    idDiagnostico: idDiagnostico,
-                    descripcion: descripcionCtrl.text,
-                    total: totalFinal,
-                    estado: 'pendiente',
-                    fechaCreacion: DateTime.now().toIso8601String(),
-                  );
+                  // Empaquetamos para Laravel
+                  final presupuestoParaLaravel = {
+                    'diagnostico_id': idDiagnostico,
+                    'descripcion': descripcionCtrl.text.trim(),
+                    'total': totalFinal,
+                    'estado': 'pendiente',
+                    'fecha_creacion': DateTime.now().toIso8601String(),
+                  };
 
-                  await dao.insertar(presupuesto);
+                  try {
+                    final provider = context.read<HelpdeskProvider>();
+                    final exito = await provider.agregarPresupuesto(presupuestoParaLaravel);
 
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ Presupuesto creado correctamente'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                    if (exito && context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('✅ Presupuesto creado correctamente'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('❌ Error al guardar: $e'),
+                          backgroundColor: Colors.redAccent,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
                   }
                 },
               ),

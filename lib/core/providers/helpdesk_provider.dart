@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:gontech_flow_v2/core/models/diagnostico.dart';
 import 'package:gontech_flow_v2/core/models/ingreso.dart';
+import 'package:gontech_flow_v2/core/models/reparacion.dart';
+import 'package:gontech_flow_v2/core/models/entrega.dart'; // <-- Para el fallback local
 import '../config/api_config.dart';
 import '../dao/cliente_dao.dart';
 import '../dao/equipo_dao.dart';
@@ -15,7 +17,11 @@ import '../services/remote_dashboard_service.dart';
 import '../services/remote_cliente_service.dart';
 import '../services/remote_equipo_service.dart';
 import '../services/remote_ingreso_service.dart';
-import '../services/remote_diagnostico_service.dart'; // <-- Importación del nuevo servicio remotos
+import '../services/remote_diagnostico_service.dart';
+import '../services/remote_presupuesto_service.dart';
+import '../services/remote_reparacion_service.dart';
+import '../services/remote_repuesto_service.dart';
+import '../services/remote_entrega_service.dart'; 
 import '../models/cliente.dart';
 
 class HelpdeskProvider extends ChangeNotifier {
@@ -33,7 +39,11 @@ class HelpdeskProvider extends ChangeNotifier {
   final RemoteClienteService _remoteCliente = RemoteClienteService();
   final RemoteEquipoService _remoteEquipo = RemoteEquipoService();
   final RemoteIngresoService _remoteIngreso = RemoteIngresoService();
-  final RemoteDiagnosticoService _remoteDiagnostico = RemoteDiagnosticoService(); // <-- Instancia del servicio
+  final RemoteDiagnosticoService _remoteDiagnostico = RemoteDiagnosticoService();
+  final RemotePresupuestoService _remotePresupuesto = RemotePresupuestoService();
+  final RemoteReparacionService _remoteReparacion = RemoteReparacionService();
+  final RemoteRepuestoService _remoteRepuesto = RemoteRepuestoService(); 
+  final RemoteEntregaService _remoteEntrega = RemoteEntregaService(); 
 
   Map<String, int> resumen = {
     'Clientes': 0, 'Equipos': 0, 'Ingresos': 0, 'Diagnósticos': 0, 'Presupuestos': 0, 'Reparaciones': 0,
@@ -55,7 +65,9 @@ class HelpdeskProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get presupuestos => _presupuestos;
   List<Map<String, dynamic>> _reparaciones = [];
   List<Map<String, dynamic>> get reparaciones => _reparaciones;
-  List<Map<String, dynamic>> _entregas = [];
+  List<Map<String, dynamic>> _repuestos = []; 
+  List<Map<String, dynamic>> get repuestos => _repuestos;
+  List<Map<String, dynamic>> _entregas = []; 
   List<Map<String, dynamic>> get entregas => _entregas;
   List<Map<String, dynamic>> _informes = [];
   List<Map<String, dynamic>> get informes => _informes;
@@ -220,24 +232,230 @@ class HelpdeskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- MÉTODOS DE RECARGA RESTANTES ---
+  // --- CRUD PRESUPUESTOS ---
+  Future<bool> agregarPresupuesto(Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remotePresupuesto.crearPresupuesto(data);
+        if (res != null) { 
+          await recargarPresupuestos(); 
+          return true; 
+        }
+        return false;
+      }
+      return false;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> recargarPresupuestos() async {
-    _presupuestos = await _presupuestoDao.listarDetallado();
+    if (await ApiConfig.useApiMode()) {
+      try {
+        final data = await _remotePresupuesto.obtenerPresupuestos();
+        _presupuestos = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (e) {
+        print('Error recargando presupuestos desde API: $e');
+      }
+    } else {
+      _presupuestos = await _presupuestoDao.listarDetallado();
+    }
     resumen['Presupuestos'] = _presupuestos.length;
     notifyListeners();
   }
 
+  // --- CRUD REPARACIONES ---
+  Future<bool> agregarReparacion(Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteReparacion.crearReparacion(data);
+        if (res != null) { 
+          await recargarReparaciones(); 
+          return true; 
+        }
+        return false;
+      }
+      final id = await _reparacionDao.insertar(data as Reparacion);
+      if (id > 0) { 
+        await recargarReparaciones(); 
+        return true; 
+      }
+      return false;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> actualizarReparacion(int id, Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteReparacion.actualizarReparacion(id, data);
+        if (res != null) { 
+          await recargarReparaciones(); 
+          return true; 
+        }
+        return false;
+      }
+      await _reparacionDao.actualizarEstado(id, data['estado'] ?? 'pendiente');
+      await recargarReparaciones();
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> recargarReparaciones() async {
-    _reparaciones = await _reparacionDao.listarDetallado();
+    if (await ApiConfig.useApiMode()) {
+      try {
+        final data = await _remoteReparacion.obtenerReparaciones();
+        _reparaciones = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (e) {
+        print('Error recargando reparaciones desde API: $e');
+      }
+    } else {
+      _reparaciones = await _reparacionDao.listarDetallado();
+    }
     resumen['Reparaciones'] = _reparaciones.length;
     notifyListeners();
   }
 
-  Future<void> recargarEntregas() async {
-    _entregas = await _entregasDao.listarDetallado();
+  // --- CRUD REPUESTOS ---
+  Future<bool> agregarRepuesto(Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteRepuesto.crearRepuesto(data);
+        if (res != null) { 
+          await recargarRepuestos(); 
+          return true; 
+        }
+        return false;
+      }
+      return false;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> cambiarEstadoRepuesto(int id, String nuevoEstado) async {
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteRepuesto.actualizarRepuesto(id, {'estado': nuevoEstado});
+        if (res != null) { 
+          await recargarRepuestos(); 
+          return true; 
+        }
+        return false;
+      }
+      await _repuestoDao.actualizarEstado(id, nuevoEstado);
+      await recargarRepuestos();
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  Future<void> recargarRepuestos() async {
+    if (await ApiConfig.useApiMode()) {
+      try {
+        final data = await _remoteRepuesto.obtenerRepuestos();
+        _repuestos = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (e) {
+        print('Error recargando repuestos desde API: $e');
+      }
+    } else {
+      _repuestos = await _repuestoDao.listarDetallado();
+    }
     notifyListeners();
   }
 
+  // --- CRUD ENTREGAS ---
+  Future<bool> procesarEntrega(Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteEntrega.crearEntrega(data);
+        if (res != null) { 
+          await recargarEntregas(); 
+          return true; 
+        }
+        return false;
+      }
+      // Modo Local histórico
+      final id = await _entregasDao.insertar(data as Entrega);
+      if (id > 0) { 
+        await recargarEntregas(); 
+        return true; 
+      }
+      return false;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  // Método agregado para actualizar la entrega y su firma en Base64
+  Future<bool> actualizarEntrega(int id, Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final res = await _remoteEntrega.actualizarEntrega(id, data);
+        if (res != null) { 
+          await recargarEntregas(); 
+          return true; 
+        }
+        return false;
+      }
+      // Modo Local (Fallback)
+      await _entregasDao.actualizarEstado(id, data['estado'] ?? 'entregado');
+      await recargarEntregas();
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> recargarEntregas() async {
+    if (await ApiConfig.useApiMode()) {
+      try {
+        final data = await _remoteEntrega.obtenerEntregas();
+        _entregas = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (e) {
+        print('Error recargando entregas desde API: $e');
+      }
+    } else {
+      _entregas = await _entregasDao.listarDetallado();
+    }
+    notifyListeners();
+  }
+
+  // --- MÉTODOS DE RECARGA RESTANTES ---
   Future<void> recargarInformes() async {
     _informes = await _informeDao.listarDetallado();
     notifyListeners();
@@ -250,7 +468,8 @@ class HelpdeskProvider extends ChangeNotifier {
     await recargarDiagnosticos();
     await recargarPresupuestos();
     await recargarReparaciones();
-    await recargarEntregas();
+    await recargarRepuestos();
+    await recargarEntregas(); 
     await recargarInformes();
   }
 }

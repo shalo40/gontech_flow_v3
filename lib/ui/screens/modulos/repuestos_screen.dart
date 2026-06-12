@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart'; // <-- Inyección del Provider
 import '../../../core/dao/repuesto_dao.dart';
+import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
 
@@ -14,8 +16,7 @@ class RepuestosScreen extends StatefulWidget {
 }
 
 class _RepuestosScreenState extends State<RepuestosScreen> {
-  final dao = RepuestoDao();
-  List<Map<String, dynamic>> repuestos = [];
+  final dao = RepuestoDao(); // Mantenido para acciones locales temporales
   String filtroEstado = 'todos';
   String filtroProveedor = 'todos';
   String busqueda = '';
@@ -25,23 +26,29 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
   @override
   void initState() {
     super.initState();
-    cargar();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargar();
+    });
   }
 
-  Future<void> cargar() async {
-    final data = await dao.listarDetallado();
-    
-    if (widget.idDiagnosticoFiltro != null) {
-      final filtrados = data.where((r) => r['id_diagnostico'] == widget.idDiagnosticoFiltro).toList();
-      setState(() => repuestos = filtrados);
-    } else {
-      setState(() => repuestos = data);
-    }
+  Future<void> _cargar() async {
+    await context.read<HelpdeskProvider>().recargarRepuestos();
   }
+
+  // --- Helpers de compatibilidad API / Local ---
+  int _getId(Map<String, dynamic> r) {
+    return int.tryParse((r['id_repuesto'] ?? r['id'] ?? '0').toString()) ?? 0;
+  }
+
+  int _getDiagnosticoId(Map<String, dynamic> r) {
+    return int.tryParse((r['id_diagnostico'] ?? r['diagnostico_id'] ?? '0').toString()) ?? 0;
+  }
+  // ---------------------------------------------
 
   Color _colorEstado(String estado) {
     switch (estado) {
       case 'pendiente':
+      case 'sugerido':
         return Colors.amberAccent;
       case 'instalado':
         return Colors.greenAccent;
@@ -55,6 +62,7 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
   IconData _iconoEstado(String estado) {
     switch (estado) {
       case 'pendiente':
+      case 'sugerido':
         return Icons.timelapse;
       case 'instalado':
         return Icons.check_circle;
@@ -65,8 +73,15 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _filtrarYOrdenar() {
-    var lista = repuestos.where((r) {
+  List<Map<String, dynamic>> _filtrarYOrdenar(List<Map<String, dynamic>> repuestosGlobales) {
+    var lista = repuestosGlobales;
+
+    // Si la pantalla fue llamada desde Reparaciones con un filtro específico
+    if (widget.idDiagnosticoFiltro != null) {
+      lista = lista.where((r) => _getDiagnosticoId(r) == widget.idDiagnosticoFiltro).toList();
+    }
+
+    lista = lista.where((r) {
       final estado = r['estado'] ?? '';
       final proveedor = (r['proveedor'] ?? '').toString().toLowerCase();
       final nombre = (r['nombre'] ?? '').toString().toLowerCase();
@@ -89,7 +104,7 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
       );
     } else {
       lista.sort(
-        (a, b) => (b['id_repuesto'] as int).compareTo(a['id_repuesto'] as int),
+        (a, b) => _getId(b).compareTo(_getId(a)),
       );
     }
 
@@ -98,7 +113,9 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lista = _filtrarYOrdenar();
+    final provider = context.watch<HelpdeskProvider>();
+    final isLoading = provider.loading;
+    final lista = _filtrarYOrdenar(provider.repuestos);
 
     return LayoutPrincipal(
       titulo: 'Repuestos',
@@ -188,7 +205,7 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
                 children: [
                   _chipFiltro('todos', 'Todos', Icons.list_alt),
                   const SizedBox(width: 6),
-                  _chipFiltro('pendiente', 'Pendientes', Icons.timelapse),
+                  _chipFiltro('sugerido', 'Sugeridos', Icons.lightbulb_outline), // <-- Agregado 'sugerido'
                   const SizedBox(width: 6),
                   _chipFiltro('instalado', 'Instalados', Icons.check_circle),
                   const SizedBox(width: 6),
@@ -200,23 +217,26 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
 
             // 📦 Lista de repuestos
             Expanded(
-              child: lista.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No hay repuestos registrados.',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: cargar,
-                      child: ListView.builder(
-                        itemCount: lista.length,
-                        itemBuilder: (context, index) {
-                          final r = lista[index];
-                          return _cardRepuesto(r);
-                        },
-                      ),
-                    ),
+              child: isLoading && lista.isEmpty
+                  ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+                  : lista.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No hay repuestos registrados.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        )
+                      : RefreshIndicator(
+                          color: Colors.tealAccent,
+                          onRefresh: _cargar,
+                          child: ListView.builder(
+                            itemCount: lista.length,
+                            itemBuilder: (context, index) {
+                              final r = lista[index];
+                              return _cardRepuesto(r, provider);
+                            },
+                          ),
+                        ),
             ),
           ],
         ),
@@ -249,12 +269,14 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
     );
   }
 
-  Widget _cardRepuesto(Map<String, dynamic> r) {
-    final estado = r['estado'] ?? 'pendiente';
-    final fecha = r['fecha_registro'] != null
-        ? formatoFecha.format(DateTime.parse(r['fecha_registro']))
+  Widget _cardRepuesto(Map<String, dynamic> r, HelpdeskProvider provider) {
+    final estado = r['estado'] ?? 'sugerido';
+    final fechaRaw = r['fecha_registro'] ?? r['created_at'];
+    final fecha = fechaRaw != null
+        ? formatoFecha.format(DateTime.parse(fechaRaw.toString()))
         : '-';
-    final costo = r['costo_unitario']?.toStringAsFixed(0) ?? '0';
+    final costo = r['costo_unitario']?.toString() ?? '0';
+    final idRepuesto = _getId(r);
 
     return Card(
       color: AppColors.fondo.withOpacity(0.9),
@@ -283,11 +305,11 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
           ),
           onSelected: (opcion) async {
             if (opcion == 'instalar' || opcion == 'rechazar') {
-              final nuevoEstado = opcion == 'instalar'
-                  ? 'instalado'
-                  : 'rechazado';
-              await dao.actualizarEstado(r['id_repuesto'], nuevoEstado);
-              await cargar();
+              final nuevoEstado = opcion == 'instalar' ? 'instalado' : 'rechazado';
+              
+              // Usamos el Provider para actualizar el estado
+              await provider.cambiarEstadoRepuesto(idRepuesto, nuevoEstado);
+              
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -301,8 +323,8 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
                 );
               }
             } else if (opcion == 'eliminar') {
-              await dao.eliminar(r['id_repuesto']);
-              await cargar();
+              await dao.eliminar(idRepuesto); // Uso de DAO local temporal para bajas
+              await _cargar();
             }
           },
           itemBuilder: (context) => [
