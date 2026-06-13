@@ -308,7 +308,7 @@ class _RepuestosScreenState extends State<RepuestosScreen> {
               final nuevoEstado = opcion == 'instalar' ? 'instalado' : 'rechazado';
               
               // Usamos el Provider para actualizar el estado
-              await provider.cambiarEstadoRepuesto(idRepuesto, nuevoEstado);
+              await provider.actualizarRepuesto(idRepuesto, {'estado': nuevoEstado});
               
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(

@@ -1,11 +1,12 @@
 import 'dart:core';
-
 import 'package:dio/dio.dart';
 import '../network/api_client.dart';
 
 class RemoteEntregaService {
   
-  // Obtener todas las entregas registradas (Laravel resolverá el árbol relacional completo)
+  // --- 📡 MÉTODOS PÚBLICOS ---
+
+  /// Obtiene todas las entregas registradas (Laravel resolverá el árbol relacional completo)
   Future<List<dynamic>> obtenerEntregas() async {
     try {
       final dio = await ApiClient.instance.dio;
@@ -16,12 +17,12 @@ class RemoteEntregaService {
       }
       return [];
     } catch (e) {
-      print('Error en RemoteEntregaService.obtenerEntregas: $e');
+      print('❌ Error en RemoteEntregaService.obtenerEntregas: $e');
       throw Exception('Error al conectar con el servidor para obtener el listado de entregas.');
     }
   }
 
-  // Registrar una entrega formalizando el cierre (Incluye firma_base64)
+  /// Registra una entrega formalizando el cierre (Incluye firma_base64)
   Future<Map<String, dynamic>?> crearEntrega(Map<String, dynamic> entregaData) async {
     try {
       final dio = await ApiClient.instance.dio;
@@ -36,24 +37,11 @@ class RemoteEntregaService {
       return null;
       
     } catch (e) {
-      if (e is DioException && e.response != null) {
-        final responseData = e.response!.data;
-        if (responseData is Map<String, dynamic>) {
-          if (responseData.containsKey('message')) {
-            throw Exception(responseData['message']);
-          }
-          if (responseData.containsKey('errors')) {
-            final errors = responseData['errors'] as Map<String, dynamic>;
-            final firstError = errors.values.first[0];
-            throw Exception(firstError);
-          }
-        }
-      }
-      throw Exception('Error inesperado al registrar la entrega técnica.');
+      throw _manejarError('registrar', e);
     }
   }
 
-  // Actualizar datos de entrega o parchar el estado
+  /// Actualiza datos de entrega o parcha el estado (Ej: subir la firma después de creada)
   Future<Map<String, dynamic>?> actualizarEntrega(int id, Map<String, dynamic> entregaData) async {
     try {
       final dio = await ApiClient.instance.dio;
@@ -68,17 +56,11 @@ class RemoteEntregaService {
       return null;
       
     } catch (e) {
-      if (e is DioException && e.response != null) {
-        final responseData = e.response!.data;
-        if (responseData is Map<String, dynamic> && responseData.containsKey('message')) {
-          throw Exception(responseData['message']);
-        }
-      }
-      throw Exception('Error al actualizar la hoja de entrega.');
+      throw _manejarError('actualizar', e);
     }
   }
 
-  // Eliminar un registro de entrega
+  /// Elimina un registro de entrega
   Future<bool> eliminarEntrega(int id) async {
     try {
       final dio = await ApiClient.instance.dio;
@@ -86,7 +68,40 @@ class RemoteEntregaService {
       
       return response.statusCode == 200;
     } catch (e) {
+      print('❌ Error en RemoteEntregaService.eliminarEntrega: $e');
       throw Exception('Error al eliminar la entrega del servidor.');
     }
+  }
+
+  // --- 🧠 INGENIERÍA PRIVADA: Manejo Inteligente de Errores de Laravel ---
+
+  /// Analiza la DioException para extraer mensajes de error útiles o errores de validación
+  Exception _manejarError(String accion, Object e) {
+    print('❌ Error al $accion entrega: $e');
+
+    if (e is DioException && e.response != null) {
+      final responseData = e.response!.data;
+      
+      if (responseData is Map<String, dynamic>) {
+        // 1. Manejo de Errores de Validación de Laravel
+        if (responseData.containsKey('errors')) {
+          final errors = responseData['errors'] as Map<String, dynamic>;
+          if (errors.isNotEmpty) {
+            final firstErrorListing = errors.values.first;
+            if (firstErrorListing is List && firstErrorListing.isNotEmpty) {
+              return Exception(firstErrorListing[0]);
+            }
+          }
+        }
+        
+        // 2. Manejo de Mensajes Generales
+        if (responseData.containsKey('message')) {
+          return Exception(responseData['message']);
+        }
+      }
+    }
+    
+    // 3. Fallback genérico
+    return Exception('Error inesperado al $accion la entrega técnica. Verifique su conexión.');
   }
 }

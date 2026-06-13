@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/providers/helpdesk_provider.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
-// import 'reparacion_detalle_screen.dart'; // <-- Lo crearemos en el próximo paso
+import 'reparacion_detalle_screen.dart'; // <--- ✅ INTEGRACIÓN HABILITADA
 
 class ReparacionesScreen extends StatefulWidget {
   const ReparacionesScreen({super.key});
@@ -16,6 +16,7 @@ class ReparacionesScreen extends StatefulWidget {
 class _ReparacionesScreenState extends State<ReparacionesScreen> {
   String filtroEstado = 'todos';
   String busqueda = '';
+  bool _procesando = false; // 🚀 NUEVO: Escudo de protección contra dobles clicks
 
   @override
   void initState() {
@@ -79,7 +80,7 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<HelpdeskProvider>();
     final reparaciones = provider.reparaciones;
-    final isLoading = provider.loading;
+    final isLoading = provider.loading || _procesando; // 🚀 Sumamos el estado local
 
     // Acumuladores para el Tablero
     int porIniciar = 0;
@@ -106,188 +107,201 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
 
     return LayoutPrincipal(
       titulo: 'Laboratorio Técnico',
-      child: Column(
+      child: Stack( // 🚀 STACK PARA EL LOADER
         children: [
-          // 📊 1. TABLERO KANBAN SUPERIOR
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Row(
-              children: [
-                Expanded(child: _CardMetricaLab(titulo: 'En Cola', valor: porIniciar.toString(), color: Colors.redAccent, icono: Icons.inbox)),
-                const SizedBox(width: 8),
-                Expanded(child: _CardMetricaLab(titulo: 'En Mesa', valor: enProceso.toString(), color: Colors.amberAccent, icono: Icons.engineering)),
-                const SizedBox(width: 8),
-                Expanded(child: _CardMetricaLab(titulo: 'Listos', valor: finalizadas.toString(), color: Colors.greenAccent, icono: Icons.verified)),
-              ],
-            ),
-          ),
-
-          // 🔍 2. BUSCADOR Y FILTROS
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              onChanged: (v) => setState(() => busqueda = v),
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Buscar por cliente o equipo...',
-                hintStyle: const TextStyle(color: Colors.white54, fontSize: 14),
-                prefixIcon: const Icon(Icons.search, color: Colors.tealAccent, size: 20),
-                filled: true,
-                fillColor: AppColors.fondo.withOpacity(0.4),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          Column(
+            children: [
+              // 📊 1. TABLERO KANBAN SUPERIOR
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Row(
+                  children: [
+                    Expanded(child: _CardMetricaLab(titulo: 'En Cola', valor: porIniciar.toString(), color: Colors.redAccent, icono: Icons.inbox)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _CardMetricaLab(titulo: 'En Mesa', valor: enProceso.toString(), color: Colors.amberAccent, icono: Icons.engineering)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _CardMetricaLab(titulo: 'Listos', valor: finalizadas.toString(), color: Colors.greenAccent, icono: Icons.verified)),
+                  ],
+                ),
               ),
-            ),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                _chipFiltro('todos', 'Todas', Icons.list),
-                _chipFiltro('por_iniciar', 'Por Iniciar', Icons.power_settings_new),
-                _chipFiltro('en_proceso', 'En Proceso', Icons.engineering),
-                _chipFiltro('finalizada', 'Finalizadas', Icons.check_circle),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
 
-          // 📋 3. LISTADO DE ÓRDENES DE TRABAJO
-          Expanded(
-            child: isLoading && filtrados.isEmpty
-                ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
-                : filtrados.isEmpty
-                    ? const Center(child: Text('No hay equipos en esta bandeja.', style: TextStyle(color: Colors.white54)))
-                    : RefreshIndicator(
-                        color: Colors.tealAccent,
-                        backgroundColor: AppColors.fondo,
-                        onRefresh: _cargar,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          itemCount: filtrados.length,
-                          itemBuilder: (context, index) {
-                            final r = filtrados[index];
-                            final id = _getId(r);
-                            final estado = (r['estado'] ?? 'por_iniciar').toString().toLowerCase();
-                            final cliente = _getCliente(r);
-                            final equipo = _getEquipoStr(r);
-                            final falla = _getFalla(r);
+              // 🔍 2. BUSCADOR Y FILTROS
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: TextField(
+                  onChanged: (v) => setState(() => busqueda = v),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por cliente o equipo...',
+                    hintStyle: const TextStyle(color: Colors.white54, fontSize: 14),
+                    prefixIcon: const Icon(Icons.search, color: Colors.tealAccent, size: 20),
+                    filled: true,
+                    fillColor: AppColors.fondo.withOpacity(0.4),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
+                ),
+              ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    _chipFiltro('todos', 'Todas', Icons.list),
+                    _chipFiltro('por_iniciar', 'Por Iniciar', Icons.power_settings_new),
+                    _chipFiltro('en_proceso', 'En Proceso', Icons.engineering),
+                    _chipFiltro('finalizada', 'Finalizadas', Icons.check_circle),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
 
-                            final fechaRaw = r['created_at'] ?? '';
-                            final fecha = fechaRaw.isNotEmpty ? DateFormat('dd/MM HH:mm').format(DateTime.parse(fechaRaw.toString())) : '-';
+              // 📋 3. LISTADO DE ÓRDENES DE TRABAJO
+              Expanded(
+                child: provider.loading && filtrados.isEmpty
+                    ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+                    : filtrados.isEmpty
+                        ? const Center(child: Text('No hay equipos en esta bandeja.', style: TextStyle(color: Colors.white54)))
+                        : RefreshIndicator(
+                            color: Colors.tealAccent,
+                            backgroundColor: AppColors.fondo,
+                            onRefresh: _cargar,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              itemCount: filtrados.length,
+                              itemBuilder: (context, index) {
+                                final r = filtrados[index];
+                                final id = _getId(r);
+                                final estado = (r['estado'] ?? 'por_iniciar').toString().toLowerCase();
+                                final cliente = _getCliente(r);
+                                final equipo = _getEquipoStr(r);
+                                final falla = _getFalla(r);
 
-                            return Card(
-                              color: AppColors.fondo.withOpacity(0.85),
-                              margin: const EdgeInsets.symmetric(vertical: 8),
-                              elevation: 4,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(color: _colorEstado(estado).withOpacity(0.3), width: 1),
-                              ),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(20),
-                                onTap: () {
-                                  // NAVEGACIÓN AL QUIRÓFANO (Lo haremos en el próximo paso)
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Entrando al Quirófano... 🛠️')));
-                                  /* Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => ReparacionDetalleScreen(reparacion: r)),
-                                  ).then((_) => _cargar()); */
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // Fila 1: Estado y Fecha
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                final fechaRaw = r['created_at'] ?? '';
+                                final fecha = fechaRaw.isNotEmpty ? DateFormat('dd/MM HH:mm').format(DateTime.parse(fechaRaw.toString())) : '-';
+
+                                return Card(
+                                  color: AppColors.fondo.withOpacity(0.85),
+                                  margin: const EdgeInsets.symmetric(vertical: 8),
+                                  elevation: 4,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    side: BorderSide(color: _colorEstado(estado).withOpacity(0.3), width: 1),
+                                  ),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(20),
+                                    onTap: () {
+                                      // 🚀 NAVEGACIÓN TÁCTIL (Tocar la tarjeta)
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (context) => ReparacionDetalleScreen(reparacion: r)),
+                                      ).then((_) => _cargar()); // 🔄 Recarga al volver
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
+                                          // Fila 1: Estado y Fecha
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(color: _colorEstado(estado).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(_iconoEstado(estado), color: _colorEstado(estado), size: 14),
+                                                    const SizedBox(width: 6),
+                                                    Text(estado.replaceAll('_', ' ').toUpperCase(), style: TextStyle(color: _colorEstado(estado), fontSize: 10, fontWeight: FontWeight.bold)),
+                                                  ],
+                                                ),
+                                              ),
+                                              Text('Ingreso: $fecha', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+
+                                          // Fila 2: Cliente y Equipo
+                                          Text(equipo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                          const SizedBox(height: 2),
+                                          Text(cliente, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                          const SizedBox(height: 12),
+
+                                          // Fila 3: Falla a reparar
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(color: _colorEstado(estado).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
                                             child: Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Icon(_iconoEstado(estado), color: _colorEstado(estado), size: 14),
-                                                const SizedBox(width: 6),
-                                                Text(estado.replaceAll('_', ' ').toUpperCase(), style: TextStyle(color: _colorEstado(estado), fontSize: 10, fontWeight: FontWeight.bold)),
+                                                const Icon(Icons.bug_report, color: Colors.white38, size: 16),
+                                                const SizedBox(width: 8),
+                                                Expanded(child: Text(falla, style: const TextStyle(color: Colors.white60, fontSize: 12, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis)),
                                               ],
                                             ),
                                           ),
-                                          Text('Ingreso: $fecha', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                          const SizedBox(height: 16),
+
+                                          // Fila 4: Botonera de Acción Directa
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            children: [
+                                              if (estado == 'por_iniciar')
+                                                ElevatedButton.icon(
+                                                  onPressed: () => _cambiarEstado(id, 'en_proceso'),
+                                                  icon: const Icon(Icons.play_arrow, size: 16, color: Colors.black),
+                                                  label: const Text('Comenzar Reparación', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black, minimumSize: const Size(0, 36)),
+                                                )
+                                              else if (estado == 'en_proceso') ...[
+                                                OutlinedButton.icon(
+                                                  onPressed: () {
+                                                    // 🚀 NAVEGACIÓN DESDE EL BOTÓN
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(builder: (context) => ReparacionDetalleScreen(reparacion: r)),
+                                                    ).then((_) => _cargar()); // 🔄 Recarga al volver
+                                                  },
+                                                  icon: const Icon(Icons.build, size: 16, color: Colors.tealAccent),
+                                                  label: const Text('Quirófano', style: TextStyle(color: Colors.tealAccent)),
+                                                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.tealAccent), minimumSize: const Size(0, 36)),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                ElevatedButton.icon(
+                                                  onPressed: () => _cambiarEstado(id, 'finalizada'),
+                                                  icon: const Icon(Icons.check, size: 16, color: Colors.black),
+                                                  label: const Text('Finalizar', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black, minimumSize: const Size(0, 36)),
+                                                ),
+                                              ] else if (estado == 'finalizada')
+                                                ElevatedButton.icon(
+                                                  onPressed: () => _cambiarEstado(id, 'entregada'),
+                                                  icon: const Icon(Icons.rocket_launch, size: 16, color: Colors.white),
+                                                  label: const Text('Mandar a Entregas', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent, foregroundColor: Colors.white, minimumSize: const Size(0, 36)),
+                                                ),
+                                            ],
+                                          ),
                                         ],
                                       ),
-                                      const SizedBox(height: 12),
-
-                                      // Fila 2: Cliente y Equipo
-                                      Text(equipo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                                      const SizedBox(height: 2),
-                                      Text(cliente, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                                      const SizedBox(height: 12),
-
-                                      // Fila 3: Falla a reparar
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
-                                        child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const Icon(Icons.bug_report, color: Colors.white38, size: 16),
-                                            const SizedBox(width: 8),
-                                            Expanded(child: Text(falla, style: const TextStyle(color: Colors.white60, fontSize: 12, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-
-                                      // Fila 4: Botonera de Acción Directa
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          if (estado == 'por_iniciar')
-                                            ElevatedButton.icon(
-                                              onPressed: () => _cambiarEstado(id, 'en_proceso'),
-                                              icon: const Icon(Icons.play_arrow, size: 16, color: Colors.black),
-                                              label: const Text('Comenzar Reparación', style: TextStyle(fontWeight: FontWeight.bold)),
-                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black, minimumSize: const Size(0, 36)),
-                                            )
-                                          else if (estado == 'en_proceso') ...[
-                                            OutlinedButton.icon(
-                                              onPressed: () {
-                                                // Abrir detalle
-                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abriendo Quirófano...')));
-                                              },
-                                              icon: const Icon(Icons.build, size: 16, color: Colors.tealAccent),
-                                              label: const Text('Quirófano', style: TextStyle(color: Colors.tealAccent)),
-                                              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.tealAccent), minimumSize: const Size(0, 36)),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            ElevatedButton.icon(
-                                              onPressed: () => _cambiarEstado(id, 'finalizada'),
-                                              icon: const Icon(Icons.check, size: 16, color: Colors.black),
-                                              label: const Text('Finalizar', style: TextStyle(fontWeight: FontWeight.bold)),
-                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black, minimumSize: const Size(0, 36)),
-                                            ),
-                                          ] else if (estado == 'finalizada')
-                                            ElevatedButton.icon(
-                                              onPressed: () => _cambiarEstado(id, 'entregada'), // Gatillará lógica de entrega a futuro
-                                              icon: const Icon(Icons.rocket_launch, size: 16, color: Colors.white),
-                                              label: const Text('Mandar a Entregas', style: TextStyle(fontWeight: FontWeight.bold)),
-                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent, foregroundColor: Colors.white, minimumSize: const Size(0, 36)),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                                );
+                              },
+                            ),
+                          ),
+              ),
+            ],
           ),
+          
+          // 🚀 LOADER FLOTANTE (Bloquea la pantalla mientras procesa)
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(child: CircularProgressIndicator(color: Colors.tealAccent)),
+            ),
         ],
       ),
     );
@@ -295,12 +309,13 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
 
   // --- Lógica del Flujo hacia Laravel ---
   Future<void> _cambiarEstado(int id, String nuevoEstado) async {
+    setState(() => _procesando = true); // Bloquea la UI
     try {
       final provider = context.read<HelpdeskProvider>();
       final exito = await provider.actualizarReparacion(id, {'estado': nuevoEstado});
       
       if (exito && mounted) {
-        await _cargar(); // Refresca la lista local
+        await _cargar(); // Refresca Kanban
         
         String msj = '';
         if (nuevoEstado == 'en_proceso') msj = '🛠️ Equipo en mesa de trabajo.';
@@ -311,6 +326,8 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
+    } finally {
+      if (mounted) setState(() => _procesando = false); // Desbloquea la UI
     }
   }
 
@@ -338,7 +355,6 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
   }
 }
 
-// Widget auxiliar para el Tablero Kanban
 class _CardMetricaLab extends StatelessWidget {
   final String titulo;
   final String valor;

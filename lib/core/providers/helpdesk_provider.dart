@@ -431,7 +431,7 @@ class HelpdeskProvider extends ChangeNotifier {
   }
   
 
-  // --- CRUD REPARACIONES ---
+// --- CRUD REPARACIONES ---
   Future<bool> agregarReparacion(Map<String, dynamic> data) async {
     _loading = true;
     notifyListeners();
@@ -444,6 +444,7 @@ class HelpdeskProvider extends ChangeNotifier {
         }
         return false;
       }
+      // Fallback local SQLite
       final id = await _reparacionDao.insertar(data as Reparacion);
       if (id > 0) { 
         await recargarReparaciones(); 
@@ -470,7 +471,35 @@ class HelpdeskProvider extends ChangeNotifier {
         }
         return false;
       }
-      await _reparacionDao.actualizarEstado(id, data['estado'] ?? 'pendiente');
+      // Fallback local SQLite
+      if (data.containsKey('estado')) {
+        await _reparacionDao.actualizarEstado(id, data['estado']);
+      }
+      await recargarReparaciones();
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  // 🚀 NUEVO: Método para eliminar reparaciones
+  Future<bool> eliminarReparacion(int id) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final exito = await _remoteReparacion.eliminarReparacion(id);
+        if (exito) {
+          await recargarReparaciones();
+          return true;
+        }
+        return false;
+      }
+      // Fallback local SQLite
+      await _reparacionDao.eliminar(id);
       await recargarReparaciones();
       return true;
     } catch (e) {
@@ -492,11 +521,13 @@ class HelpdeskProvider extends ChangeNotifier {
     } else {
       _reparaciones = await _reparacionDao.listarDetallado();
     }
+    
+    // Actualizamos las métricas del dashboard si existe el mapa resumen
     resumen['Reparaciones'] = _reparaciones.length;
     notifyListeners();
   }
 
-  // --- CRUD REPUESTOS ---
+// --- CRUD REPUESTOS ---
   Future<bool> agregarRepuesto(Map<String, dynamic> data) async {
     _loading = true;
     notifyListeners();
@@ -518,17 +549,42 @@ class HelpdeskProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> cambiarEstadoRepuesto(int id, String nuevoEstado) async {
+  // 🚀 REEMPLAZAMOS cambiarEstadoRepuesto POR actualizarRepuesto
+  Future<bool> actualizarRepuesto(int id, Map<String, dynamic> data) async {
     try {
       if (await ApiConfig.useApiMode()) {
-        final res = await _remoteRepuesto.actualizarRepuesto(id, {'estado': nuevoEstado});
+        final res = await _remoteRepuesto.actualizarRepuesto(id, data);
         if (res != null) { 
           await recargarRepuestos(); 
           return true; 
         }
         return false;
       }
-      await _repuestoDao.actualizarEstado(id, nuevoEstado);
+      // Fallback a local si sigues usando SQLite de respaldo
+      if (data.containsKey('estado')) {
+        await _repuestoDao.actualizarEstado(id, data['estado']);
+      }
+      await recargarRepuestos();
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  // 🚀 NUEVO: Método para eliminar insumos
+  Future<bool> eliminarRepuesto(int id) async {
+    try {
+      if (await ApiConfig.useApiMode()) {
+        // Asegúrate de tener este método en tu _remoteRepuesto (RemoteRepuestoService)
+        final exito = await _remoteRepuesto.eliminarRepuesto(id);
+        if (exito) {
+          await recargarRepuestos();
+          return true;
+        }
+        return false;
+      }
+      // Fallback a local
+      await _repuestoDao.eliminar(id);
       await recargarRepuestos();
       return true;
     } catch (e) {
@@ -550,7 +606,8 @@ class HelpdeskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- CRUD ENTREGAS ---
+// --- CRUD ENTREGAS ---
+  
   Future<bool> procesarEntrega(Map<String, dynamic> data) async {
     _loading = true;
     notifyListeners();
@@ -563,7 +620,9 @@ class HelpdeskProvider extends ChangeNotifier {
         }
         return false;
       }
-      final id = await _entregasDao.insertar(data as Entrega);
+      // Fallback local SQLite (Asegurando que no crashee el casteo)
+      // Asume que tienes un factory fromMap en tu clase Entrega si usas SQLite
+      final id = await _entregasDao.insertar(data as dynamic); 
       if (id > 0) { 
         await recargarEntregas(); 
         return true; 
@@ -589,7 +648,35 @@ class HelpdeskProvider extends ChangeNotifier {
         }
         return false;
       }
-      await _entregasDao.actualizarEstado(id, data['estado'] ?? 'entregado');
+      // Fallback local SQLite
+      if (data.containsKey('estado')) {
+        await _entregasDao.actualizarEstado(id, data['estado']);
+      }
+      await recargarEntregas();
+      return true;
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  // 🚀 NUEVO: Eliminar entrega
+  Future<bool> eliminarEntrega(int id) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      if (await ApiConfig.useApiMode()) {
+        final exito = await _remoteEntrega.eliminarEntrega(id);
+        if (exito) {
+          await recargarEntregas();
+          return true;
+        }
+        return false;
+      }
+      // Fallback local SQLite
+      await _entregasDao.eliminar(id);
       await recargarEntregas();
       return true;
     } catch (e) {
@@ -611,6 +698,9 @@ class HelpdeskProvider extends ChangeNotifier {
     } else {
       _entregas = await _entregasDao.listarDetallado();
     }
+    
+    // Opcional: Actualizamos las métricas del dashboard si existe el mapa resumen
+    resumen['Entregas'] = _entregas.length; 
     notifyListeners();
   }
 
