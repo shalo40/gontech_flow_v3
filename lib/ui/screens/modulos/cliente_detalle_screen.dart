@@ -1,11 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../../core/dao/cliente_dao.dart';
-import '../../../core/dao/equipo_dao.dart';
-import '../../../core/dao/ingreso_dao.dart';
 import '../../../core/models/cliente.dart';
-import '../../../core/models/equipo.dart';
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../theme/app_colors.dart';
 import 'cliente_modal.dart';
 import 'ingreso_modal.dart';
@@ -13,7 +11,6 @@ import 'ingreso_detalle_screen.dart';
 
 class ClienteDetalleScreen extends StatefulWidget {
   final int idCliente;
-
   const ClienteDetalleScreen({super.key, required this.idCliente});
 
   @override
@@ -21,100 +18,128 @@ class ClienteDetalleScreen extends StatefulWidget {
 }
 
 class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
-  final _clienteDao = ClienteDao();
-  final _equipoDao = EquipoDao();
-  final _ingresoDao = IngresoDAO();
-
-  Cliente? _cliente;
-  List<Equipo> _equipos = [];
-  List<Map<String, dynamic>> _ingresos = [];
-  bool _loading = true;
-
-  static const _colorModulo = Colors.blueAccent;
-
   @override
   void initState() {
     super.initState();
-    _cargar();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _cargarDatos());
   }
 
-  Future<void> _cargar() async {
-    setState(() => _loading = true);
-    try {
-      final cliente = await _clienteDao.obtenerPorId(widget.idCliente);
-      final equipos = await _equipoDao.listarPorCliente(widget.idCliente);
-      final todosIngresos = await _ingresoDao.listarIngresosDetallados();
-      final ingresosCliente = todosIngresos
-          .where((i) => i['nombre_cliente'] == cliente?.nombre)
-          .toList();
+  Future<void> _cargarDatos() async {
+    final provider = context.read<HelpdeskProvider>();
+    // Nos aseguramos de tener la info global fresca
+    await provider.recargarClientes();
+    await provider.recargarIngresos();
+  }
 
-      if (!mounted) return;
-      setState(() {
-        _cliente = cliente;
-        _equipos = equipos;
-        _ingresos = ingresosCliente;
-        _loading = false;
-      });
+  // Helper de filtrado local para evitar crear endpoints nuevos en el Provider
+  Cliente? _obtenerCliente(HelpdeskProvider provider) {
+    try {
+      return provider.clientes.firstWhere((c) => c.idCliente == widget.idCliente);
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      return null;
     }
+  }
+
+  List<dynamic> _obtenerIngresosDelCliente(HelpdeskProvider provider, Cliente c) {
+    return provider.ingresos.where((i) {
+      final nombreCli = (i['nombre_cliente'] ?? i['equipo']?['cliente']?['nombre'] ?? '').toString().toLowerCase();
+      return nombreCli == c.nombre.toLowerCase();
+    }).toList();
+  }
+
+  // Extrae los equipos únicos a partir de los ingresos registrados
+  List<Map<String, dynamic>> _obtenerEquiposUnicos(List<dynamic> ingresos) {
+    final Map<String, Map<String, dynamic>> equipos = {};
+    for (var i in ingresos) {
+      final eq = i['equipo'];
+      if (eq != null && eq['id'] != null) {
+        equipos[eq['id'].toString()] = eq;
+      }
+    }
+    return equipos.values.toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<HelpdeskProvider>();
+    final cliente = _obtenerCliente(provider);
+    final isLoading = provider.loading;
+
+    if (isLoading && cliente == null) {
+      return const Scaffold(backgroundColor: AppColors.fondo, body: Center(child: CircularProgressIndicator(color: Colors.tealAccent)));
+    }
+
+    if (cliente == null) {
+      return Scaffold(
+        backgroundColor: AppColors.fondo,
+        appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+        body: const Center(child: Text('Cliente no encontrado en el sistema.', style: TextStyle(color: Colors.white70))),
+      );
+    }
+
+    final ingresosCliente = _obtenerIngresosDelCliente(provider, cliente);
+    final equiposCliente = _obtenerEquiposUnicos(ingresosCliente);
+
     return Scaffold(
       backgroundColor: AppColors.fondo,
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: _colorModulo),
-            )
-          : _cliente == null
-              ? const Center(
-                  child: Text('Cliente no encontrado',
-                      style: TextStyle(color: Colors.white70)),
-                )
-              : CustomScrollView(
-                  slivers: [
-                    _buildAppBar(),
-                    SliverToBoxAdapter(child: _buildInfoSection()),
-                    SliverToBoxAdapter(child: _buildEquiposSection()),
-                    SliverToBoxAdapter(child: _buildIngresosSection()),
-                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                  ],
-                ),
-      floatingActionButton: _cliente != null
-          ? FloatingActionButton.extended(
-              backgroundColor: _colorModulo,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Nuevo ingreso'),
-              onPressed: () async {
-                await mostrarIngresoModal(context, widget.idCliente);
-                await _cargar();
-              },
-            )
-          : null,
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.tealAccent,
+        icon: const Icon(Icons.add, color: Colors.black),
+        label: const Text('Registrar Ingreso', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        onPressed: () async {
+          await mostrarIngresoModal(context, cliente.idCliente!);
+          _cargarDatos(); // Refrescar tras agregar
+        },
+      ),
+      body: CustomScrollView(
+        slivers: [
+          _buildAppBar(cliente),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  // Módulo de Contacto
+                  _buildContactoCard(cliente),
+                  
+                  const SizedBox(height: 24),
+                  // Módulo de Equipos Registrados
+                  const Text('Parque de Equipos', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  _buildEquiposSection(equiposCliente),
+
+                  const SizedBox(height: 24),
+                  // Módulo de Historial de Ingresos
+                  const Text('Historial de Servicios', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  _buildIngresosSection(ingresosCliente),
+                  
+                  const SizedBox(height: 100), // Espacio para el FAB
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildAppBar() {
-    final c = _cliente!;
-    final tieneFoto = c.fotoPath?.isNotEmpty ?? false;
+  Widget _buildAppBar(Cliente cliente) {
+    final tieneFoto = cliente.fotoPath?.isNotEmpty ?? false;
 
     return SliverAppBar(
       expandedHeight: 220,
       pinned: true,
       backgroundColor: AppColors.fondo,
-      foregroundColor: Colors.white,
+      iconTheme: const IconThemeData(color: Colors.white),
       actions: [
         IconButton(
           icon: const Icon(Icons.edit_outlined),
+          tooltip: 'Editar Cliente',
           onPressed: () async {
-            await mostrarClienteModal(
-              context,
-              clienteExistente: c,
-              onGuardado: _cargar,
-            );
+            await mostrarClienteModal(context, clienteExistente: cliente, onGuardado: _cargarDatos);
           },
         ),
       ],
@@ -122,10 +147,7 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
         background: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                _colorModulo.withValues(alpha: 0.3),
-                AppColors.fondo,
-              ],
+              colors: [Colors.tealAccent.withOpacity(0.25), AppColors.fondo],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -134,47 +156,32 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
                 Hero(
-                  tag: 'cliente_${c.idCliente}',
+                  tag: 'cliente_${cliente.idCliente}',
                   child: CircleAvatar(
                     radius: 44,
-                    backgroundColor: _colorModulo.withValues(alpha: 0.25),
-                    backgroundImage:
-                        tieneFoto ? FileImage(File(c.fotoPath!)) : null,
+                    backgroundColor: Colors.tealAccent.withOpacity(0.15),
+                    backgroundImage: tieneFoto ? FileImage(File(cliente.fotoPath!)) : null,
                     child: !tieneFoto
                         ? Text(
-                            c.nombre.isNotEmpty
-                                ? c.nombre[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                            cliente.nombre.isNotEmpty ? cliente.nombre[0].toUpperCase() : '?',
+                            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.tealAccent),
                           )
                         : null,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  c.nombre,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  cliente.nombre,
+                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                if ((c.rut ?? '').isNotEmpty)
+                if ((cliente.rut ?? '').isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      'RUT: ${c.rut}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 14,
-                      ),
-                    ),
+                    child: Text('RUT: ${cliente.rut}', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
                   ),
               ],
             ),
@@ -184,303 +191,127 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
     );
   }
 
-  Widget _buildInfoSection() {
-    final c = _cliente!;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+  Widget _buildContactoCard(Cliente cliente) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _statCard('Equipos', '${_equipos.length}', Icons.devices),
-              const SizedBox(width: 12),
-              _statCard('Ingresos', '${_ingresos.length}', Icons.receipt_long),
-              const SizedBox(width: 12),
-              _statCard(
-                'Activos',
-                '${_ingresos.where((i) => i['estado_ingreso'] != 'finalizado').length}',
-                Icons.pending_actions,
-              ),
-            ],
+          _infoRow(Icons.phone_outlined, cliente.telefono, fallback: 'Sin teléfono'),
+          const Divider(color: Colors.white12, height: 20),
+          _infoRow(Icons.email_outlined, cliente.correo, fallback: 'Sin correo'),
+          if ((cliente.direccion ?? '').isNotEmpty) ...[
+            const Divider(color: Colors.white12, height: 20),
+            _infoRow(Icons.location_on_outlined, cliente.direccion!),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String valor, {String fallback = ''}) {
+    final texto = valor.trim().isEmpty ? fallback : valor;
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.tealAccent.withOpacity(0.8)),
+        const SizedBox(width: 14),
+        Expanded(child: Text(texto, style: TextStyle(color: valor.trim().isEmpty ? Colors.white38 : Colors.white, fontSize: 14))),
+      ],
+    );
+  }
+
+  Widget _buildEquiposSection(List<Map<String, dynamic>> equipos) {
+    if (equipos.isEmpty) {
+      return _emptyHint('No hay equipos registrados para este cliente.');
+    }
+    return Column(
+      children: equipos.map((e) {
+        return Card(
+          color: Colors.black26,
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withOpacity(0.05))),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.purpleAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.devices, color: Colors.purpleAccent, size: 20),
+            ),
+            title: Text('${e['marca'] ?? 'Marca'} ${e['modelo'] ?? ''}'.trim(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+            subtitle: Text('S/N: ${e['numero_serie'] ?? 'Desconocido'}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
           ),
-          const SizedBox(height: 20),
-          _seccionTitulo('Contacto'),
-          const SizedBox(height: 8),
-          _infoTile(Icons.phone_outlined, 'Telefono', c.telefono ?? ''),
-          _infoTile(Icons.email_outlined, 'Correo', c.correo ?? ''),
-          _infoTile(Icons.location_on_outlined, 'Direccion', c.direccion ?? ''),
-          if (c.notas != null && c.notas!.isNotEmpty)
-            _infoTile(Icons.notes_outlined, 'Notas', c.notas ?? ''),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 
-  Widget _statCard(String label, String value, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-        decoration: BoxDecoration(
-          color: _colorModulo.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _colorModulo.withValues(alpha: 0.25)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: _colorModulo, size: 22),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildIngresosSection(List<dynamic> ingresos) {
+    if (ingresos.isEmpty) {
+      return _emptyHint('El cliente aún no tiene ingresos en el taller.');
+    }
+    
+    // Ordenamos por fecha descendente
+    ingresos.sort((a, b) => (b['created_at'] ?? '').compareTo(a['created_at'] ?? ''));
 
-  Widget _infoTile(IconData icon, String label, String value) {
-    if (value.trim().isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, color: _colorModulo.withValues(alpha: 0.7), size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    fontSize: 11,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
-              ],
+    return Column(
+      children: ingresos.map((i) {
+        final estado = (i['estado'] ?? i['estado_ingreso'] ?? 'ingresado').toString().toLowerCase();
+        final equipoStr = i['equipo'] != null 
+            ? '${i['equipo']['tipo_equipo']} ${i['equipo']['marca']}' 
+            : '${i['tipo_equipo']} ${i['marca']}';
+        
+        final fechaRaw = i['created_at'] ?? i['fecha_ingreso'];
+        final fechaStr = fechaRaw != null ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(fechaRaw.toString())) : 'Reciente';
+
+        Color colorEstado = Colors.amberAccent;
+        if (estado == 'finalizado') colorEstado = Colors.greenAccent;
+        else if (estado.contains('reparacion')) colorEstado = Colors.blueAccent;
+
+        return Card(
+          color: Colors.black26,
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withOpacity(0.05))),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => IngresoDetalleScreen(ingreso: i, equipo: i['equipo'])));
+            },
+            title: Text(equipoStr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 12, color: Colors.white.withOpacity(0.4)),
+                  const SizedBox(width: 4),
+                  Text(fechaStr, style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11)),
+                ],
+              ),
+            ),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: colorEstado.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              child: Text(estado.replaceAll('_', ' ').toUpperCase(), style: TextStyle(color: colorEstado, fontSize: 10, fontWeight: FontWeight.bold)),
             ),
           ),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildEquiposSection() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _seccionTitulo('Equipos registrados'),
-          const SizedBox(height: 8),
-          if (_equipos.isEmpty)
-            _emptyHint('Sin equipos asociados')
-          else
-            ..._equipos.map((e) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.purpleAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.devices,
-                            color: Colors.purpleAccent, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${e.marca} ${e.modelo}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              '${e.tipo_equipo} - S/N: ${e.numero_serie}',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIngresosSection() {
-    final formato = DateFormat('dd/MM/yyyy');
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _seccionTitulo('Historial de ingresos'),
-          const SizedBox(height: 8),
-          if (_ingresos.isEmpty)
-            _emptyHint('Sin ingresos registrados')
-          else
-            ..._ingresos.map((i) {
-              final estado = i['estado_ingreso'] ?? 'pendiente';
-              Color colorEstado;
-              switch (estado) {
-                case 'finalizado':
-                  colorEstado = Colors.greenAccent;
-                  break;
-                case 'en_reparacion':
-                  colorEstado = Colors.amberAccent;
-                  break;
-                default:
-                  colorEstado = Colors.orangeAccent;
-              }
-
-              String fechaStr = '-';
-              try {
-                fechaStr = formato.format(
-                    DateTime.parse(i['fecha_ingreso'] ?? ''));
-              } catch (_) {}
-
-              return InkWell(
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => IngresoDetalleScreen(ingreso: i, equipo: null,),
-                    ),
-                  );
-                  _cargar();
-                },
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Row(
-                    children: [
-                    Container(
-                      width: 8,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: colorEstado,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${i['tipo_equipo'] ?? ''} ${i['marca'] ?? ''}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            fechaStr,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: colorEstado.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        estado.replaceAll('_', ' '),
-                        style: TextStyle(
-                          color: colorEstado,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-               ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Widget _seccionTitulo(String texto) {
-    return Text(
-      texto.toUpperCase(),
-      style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.4),
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1.5,
-      ),
-    );
-  }
-
-  Widget _emptyHint(String texto) {
+  Widget _emptyHint(String mensaje) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white10),
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10, style: BorderStyle.solid),
       ),
-      child: Text(
-        texto,
-        textAlign: TextAlign.center,
-        style: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
-      ),
+      child: Text(mensaje, textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13)),
     );
   }
 }

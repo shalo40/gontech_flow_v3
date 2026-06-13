@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // <-- Inyección del Provider
-import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
+import 'package:provider/provider.dart';
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../theme/app_colors.dart';
 
 Future<void> mostrarPresupuestoModal(
@@ -9,9 +9,37 @@ Future<void> mostrarPresupuestoModal(
 ) async {
   final descripcionCtrl = TextEditingController();
   final totalCtrl = TextEditingController();
+  final provider = context.read<HelpdeskProvider>();
 
-  // 🧩 Ítems del presupuesto (simples por ahora)
+  // 🧩 Ítems del presupuesto
   final List<Map<String, dynamic>> items = [];
+
+  // --- MAGIA AUTOMÁTICA: Auto-fill desde el Diagnóstico ---
+  // 1. Buscamos el diagnóstico en la memoria del provider
+  final diag = provider.diagnosticos.firstWhere(
+    (d) => d['id'] == idDiagnostico || d['id_diagnostico'] == idDiagnostico,
+    orElse: () => {},
+  );
+
+  // 2. Si existe, extraemos las horas y agregamos la Mano de Obra automáticamente
+  if (diag.isNotEmpty) {
+    descripcionCtrl.text = 'Reparación según Diagnóstico #${diag['id']}';
+    
+    // Asumimos un valor base de hora técnica (puedes traer esto de Ajustes después)
+    const valorHoraTecnica = 25000.0; // 25.000 CLP por hora
+    final horasRaw = diag['tiempo_estimado_hrs']?.toString() ?? '1.0';
+    final horasCobrables = double.tryParse(horasRaw) ?? 1.0;
+    final costoManoObra = horasCobrables * valorHoraTecnica;
+
+    if (costoManoObra > 0) {
+      items.add({
+        'nombre': 'Mano de Obra ($horasCobrables hrs)',
+        'costo': costoManoObra,
+      });
+    }
+
+    // Aquí a futuro también puedes auto-agregar los repuestos de este diagnóstico
+  }
 
   void agregarItem(String nombre, double costo) {
     items.add({'nombre': nombre, 'costo': costo});
@@ -22,261 +50,199 @@ Future<void> mostrarPresupuestoModal(
     barrierDismissible: false,
     builder: (context) {
       return StatefulBuilder(
-        builder: (context, setState) {
-          double total = items.fold(
-            0,
-            (sum, item) => sum + (item['costo'] as double? ?? 0.0),
-          );
+        builder: (context, setModalState) {
+          // Calculamos el total dinámicamente
+          double total = items.fold(0, (sum, item) => sum + (item['costo'] as double? ?? 0.0));
 
           return AlertDialog(
             backgroundColor: AppColors.fondo.withOpacity(0.95),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            title: Row(
-              children: const [
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: const Row(
+              children: [
                 Icon(Icons.request_quote, color: Colors.tealAccent),
                 SizedBox(width: 8),
-                Text(
-                  'Nuevo presupuesto técnico',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    'Cotización de Laboratorio',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Este presupuesto se basa en el diagnóstico técnico realizado.\n'
-                    'Asegúrate de detallar correctamente los trabajos y costos estimados.',
-                    style: TextStyle(color: Colors.white60, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // 🧠 Descripción general
-                  _campo(
-                    descripcionCtrl,
-                    'Descripción general del trabajo',
-                    Icons.description_outlined,
-                    maxLines: 3,
-                  ),
-
-                  const SizedBox(height: 12),
-                  const Divider(color: Colors.white24),
-
-                  // 🧩 Ítems individuales
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Detalles de presupuesto:',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.bold,
-                      ),
+            content: SizedBox(
+              width: double.maxFinite, // Previene aplastamientos horizontales
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Este presupuesto se basa en el dictamen técnico previo. Ajusta los valores según sea necesario.',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 16),
 
-                  // Lista de ítems agregados
-                  items.isEmpty
-                      ? const Text(
-                          'Sin ítems agregados',
-                          style: TextStyle(color: Colors.white54),
-                        )
-                      : Column(
-                          children: items.map((item) {
-                            return ListTile(
-                              dense: true,
-                              visualDensity: VisualDensity.compact,
-                              title: Text(
-                                item['nombre'],
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                              trailing: Text(
-                                '\$${item['costo'].toStringAsFixed(0)} CLP',
-                                style: const TextStyle(
-                                  color: Colors.tealAccent,
-                                  fontWeight: FontWeight.bold,
+                    // 🧠 Descripción general
+                    _campo(descripcionCtrl, 'Resumen para el cliente', Icons.description_outlined, maxLines: 2),
+                    const SizedBox(height: 12),
+                    const Divider(color: Colors.white24),
+
+                    // 🧩 Ítems individuales
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Detalle de cobros:', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                        TextButton.icon(
+                          onPressed: () async {
+                            final nombreCtrl = TextEditingController();
+                            final costoCtrl = TextEditingController();
+
+                            await showDialog(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                backgroundColor: AppColors.fondo.withOpacity(0.95),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                title: const Text('Agregar cargo', style: TextStyle(color: Colors.white, fontSize: 16)),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _campo(nombreCtrl, 'Concepto (Ej: Repuesto)', Icons.edit_outlined),
+                                    const SizedBox(height: 8),
+                                    _campo(costoCtrl, 'Valor (CLP)', Icons.attach_money, tipo: TextInputType.number),
+                                  ],
                                 ),
-                              ),
-                              leading: const Icon(
-                                Icons.build_circle_outlined,
-                                color: Colors.tealAccent,
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      if (nombreCtrl.text.isNotEmpty && costoCtrl.text.isNotEmpty) {
+                                        setModalState(() {
+                                          agregarItem(nombreCtrl.text, double.tryParse(costoCtrl.text) ?? 0.0);
+                                        });
+                                        Navigator.pop(context);
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.tealAccent.withOpacity(0.2),
+                                      foregroundColor: Colors.tealAccent,
+                                      elevation: 0,
+                                    ),
+                                    child: const Text('Sumar'),
+                                  ),
+                                ],
                               ),
                             );
-                          }).toList(),
+                          },
+                          icon: const Icon(Icons.add_circle_outline, color: Colors.tealAccent, size: 16),
+                          label: const Text('Añadir', style: TextStyle(color: Colors.tealAccent, fontSize: 12)),
                         ),
+                      ],
+                    ),
 
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        final nombreCtrl = TextEditingController();
-                        final costoCtrl = TextEditingController();
-
-                        await showDialog(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            backgroundColor: AppColors.fondo.withOpacity(0.95),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            title: const Text(
-                              'Agregar ítem',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _campo(
-                                  nombreCtrl,
-                                  'Nombre del ítem',
-                                  Icons.edit_outlined,
-                                ),
-                                _campo(
-                                  costoCtrl,
-                                  'Costo estimado (CLP)',
-                                  Icons.attach_money,
-                                  tipo: TextInputType.number,
-                                ),
-                              ],
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancelar'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  if (nombreCtrl.text.isNotEmpty &&
-                                      costoCtrl.text.isNotEmpty) {
-                                    agregarItem(
-                                      nombreCtrl.text,
-                                      double.tryParse(costoCtrl.text) ?? 0.0,
-                                    );
-                                    setState(() {});
-                                    Navigator.pop(context);
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.tealAccent
-                                      .withOpacity(0.2),
-                                  foregroundColor: Colors.tealAccent,
-                                ),
-                                child: const Text('Agregar'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.add_circle_outline,
-                        color: Colors.tealAccent,
+                    // Lista de ítems agregados
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 150), // Limita altura si hay muchos items
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white12),
                       ),
-                      label: const Text(
-                        'Agregar ítem',
-                        style: TextStyle(color: Colors.tealAccent),
+                      child: items.isEmpty
+                          ? const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(child: Text('Sin ítems a cobrar', style: TextStyle(color: Colors.white54, fontSize: 12))),
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: items.length,
+                              separatorBuilder: (_, __) => const Divider(color: Colors.white12, height: 1),
+                              itemBuilder: (context, index) {
+                                final item = items[index];
+                                return ListTile(
+                                  dense: true,
+                                  visualDensity: VisualDensity.compact,
+                                  title: Text(item['nombre'], style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                  trailing: Text(
+                                    '\$${item['costo'].toStringAsFixed(0)}',
+                                    style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  leading: const Icon(Icons.check_circle_outline, color: Colors.tealAccent, size: 18),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 💰 Total y Ajuste
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.tealAccent.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Subtotal:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          Text('\$${total.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
                       ),
                     ),
-                  ),
-
-                  const Divider(color: Colors.white24),
-
-                  // 💰 Total calculado automáticamente
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'Total estimado:  \$${total.toStringAsFixed(0)} CLP',
-                      style: const TextStyle(
-                        color: Colors.tealAccent,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Campo de total manual opcional
-                  _campo(
-                    totalCtrl,
-                    'Ajuste manual del total (opcional)',
-                    Icons.calculate,
-                    tipo: TextInputType.number,
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    _campo(totalCtrl, 'Cerrar precio manualmente (Opcional)', Icons.calculate, tipo: TextInputType.number),
+                  ],
+                ),
               ),
             ),
+            actionsAlignment: MainAxisAlignment.spaceBetween,
             actions: [
-              TextButton.icon(
+              TextButton(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.cancel, color: Colors.redAccent),
-                label: const Text('Cancelar'),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.tealAccent.withOpacity(0.2),
-                  foregroundColor: Colors.tealAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  backgroundColor: Colors.tealAccent,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                 ),
-                icon: const Icon(Icons.save),
-                label: const Text('Guardar presupuesto'),
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('Emitir Presupuesto', style: TextStyle(fontWeight: FontWeight.bold)),
                 onPressed: () async {
                   if (descripcionCtrl.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Completa la descripción antes de guardar',
-                        ),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Añade un resumen para el cliente.')));
                     return;
                   }
 
-                  final totalFinal = (totalCtrl.text.isNotEmpty)
-                      ? double.tryParse(totalCtrl.text) ?? total
-                      : total;
+                  final totalFinal = (totalCtrl.text.isNotEmpty) ? double.tryParse(totalCtrl.text) ?? total : total;
 
-                  // Empaquetamos para Laravel
+                  if (totalFinal <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ El presupuesto no puede ser \$0.')));
+                    return;
+                  }
+
                   final presupuestoParaLaravel = {
                     'diagnostico_id': idDiagnostico,
                     'descripcion': descripcionCtrl.text.trim(),
                     'total': totalFinal,
-                    'estado': 'pendiente',
-                    'fecha_creacion': DateTime.now().toIso8601String(),
+                    'estado': 'pendiente', 
                   };
 
                   try {
-                    final provider = context.read<HelpdeskProvider>();
                     final exito = await provider.agregarPresupuesto(presupuestoParaLaravel);
 
                     if (exito && context.mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('✅ Presupuesto creado correctamente'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
+                        const SnackBar(content: Text('✅ Presupuesto emitido y listo para revisión del cliente.')),
                       );
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('❌ Error al guardar: $e'),
-                          backgroundColor: Colors.redAccent,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.redAccent));
                     }
                   }
                 },
@@ -289,29 +255,21 @@ Future<void> mostrarPresupuestoModal(
   );
 }
 
-Widget _campo(
-  TextEditingController ctrl,
-  String label,
-  IconData icono, {
-  TextInputType tipo = TextInputType.text,
-  int maxLines = 1,
-}) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: TextField(
-      controller: ctrl,
-      keyboardType: tipo,
-      maxLines: maxLines,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        prefixIcon: Icon(icono, color: Colors.tealAccent),
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        focusedBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.tealAccent),
-        ),
-      ),
+Widget _campo(TextEditingController ctrl, String label, IconData icono, {TextInputType tipo = TextInputType.text, int maxLines = 1}) {
+  return TextField(
+    controller: ctrl,
+    keyboardType: tipo,
+    maxLines: maxLines,
+    style: const TextStyle(color: Colors.white, fontSize: 13),
+    decoration: InputDecoration(
+      prefixIcon: Icon(icono, color: Colors.tealAccent, size: 18),
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white54, fontSize: 12),
+      filled: true,
+      fillColor: Colors.black26,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.tealAccent)),
     ),
   );
 }

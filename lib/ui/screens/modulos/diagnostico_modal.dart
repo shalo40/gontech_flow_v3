@@ -1,42 +1,43 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // <-- Inyección del Provider
-import '../../../core/dao/repuesto_dao.dart';
-import '../../../core/models/repuesto.dart';
-import '../../../core/providers/helpdesk_provider.dart'; // <-- Cerebro unificado
+import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../theme/app_colors.dart';
 import 'repuesto_modal.dart';
 
-Future<void> mostrarDiagnosticoModal(
-  BuildContext context,
-  int idIngreso,
-) async {
-  final repuestoDao = RepuestoDao();
-
+Future<void> mostrarDiagnosticoModal(BuildContext context, int idIngreso) async {
   final fallaCtrl = TextEditingController();
   final causasCtrl = TextEditingController();
   final conclusionesCtrl = TextEditingController();
-  String? tecnicoSeleccionado;
-  List<String> pruebasSeleccionadas = [];
+  final horasCtrl = TextEditingController(text: '1.0');
+  final picker = ImagePicker();
+  
+  File? fotoFalla; 
+  String? tecnicoSeleccionado = 'Gonzalo Castillo';
+  String complejidadSeleccionada = 'medio'; // bajo, medio, alto, critico
 
-  // 🔬 Opciones de pruebas
+  // 🔬 Estructura avanzada de pruebas (Mapa para guardar si Pasa o Falla)
   final List<String> pruebasDisponibles = [
-    'Prueba de encendido',
-    'Prueba de voltaje y energía',
-    'Prueba de temperatura / ventilación',
-    'Prueba de disco / SSD',
+    'Prueba de encendido / booteo',
+    'Prueba de voltaje y energía (Tester)',
+    'Prueba de temperatura y ventilación',
+    'Prueba de almacenamiento (Disco/SSD)',
     'Prueba de memoria RAM',
-    'Prueba de red / WiFi',
-    'Limpieza interna y revisión visual',
-    'Revisión BIOS / UEFI',
-    'Chequeo periféricos y conectores',
+    'Prueba de conectividad (WiFi/Red)',
+    'Limpieza interna e inspección visual',
+    'Revisión de BIOS / UEFI',
   ];
+  
+  // Guardará el estado de cada prueba: null = No realizada, true = Pasa (OK), false = Falla (A reparar)
+  Map<String, bool?> estadosPruebas = {
+    for (var prueba in pruebasDisponibles) prueba: null
+  };
 
-  // 👨‍🔧 Técnicos
   final List<String> tecnicos = [
     'Gonzalo Castillo',
     'Michelle Rivera',
     'Técnico General',
-    'Asistente Taller',
   ];
 
   int pasoActual = 0;
@@ -46,240 +47,203 @@ Future<void> mostrarDiagnosticoModal(
     barrierDismissible: false,
     builder: (context) {
       return StatefulBuilder(
-        builder: (context, setState) {
+        builder: (context, setModalState) {
+          final provider = context.watch<HelpdeskProvider>();
+
+          Future<void> capturarFotoFalla() async {
+            final XFile? imagen = await picker.pickImage(
+              source: ImageSource.camera,
+              imageQuality: 70,
+            );
+            if (imagen != null) {
+              setModalState(() => fotoFalla = File(imagen.path));
+            }
+          }
+
           return AlertDialog(
             backgroundColor: AppColors.fondo.withOpacity(0.97),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            title: Row(
-              children: const [
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: const Row(
+              children: [
                 Icon(Icons.biotech, color: Colors.tealAccent),
                 SizedBox(width: 8),
                 Text(
                   'Asistente de diagnóstico',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                 ),
               ],
             ),
             content: SizedBox(
-              width: 420,
+              width: 460,
               child: Theme(
                 data: ThemeData.dark().copyWith(
-                  colorScheme: ColorScheme.dark(
-                    primary: Colors.tealAccent.shade400,
-                  ),
+                  colorScheme: ColorScheme.dark(primary: Colors.tealAccent.shade400),
                 ),
                 child: Stepper(
                   type: StepperType.vertical,
                   currentStep: pasoActual,
-                  onStepTapped: (n) => setState(() => pasoActual = n),
+                  onStepTapped: (n) => setModalState(() => pasoActual = n),
                   onStepContinue: () {
                     if (pasoActual < 2) {
-                      setState(() => pasoActual++);
+                      setModalState(() => pasoActual++);
                     }
                   },
                   onStepCancel: () {
                     if (pasoActual > 0) {
-                      setState(() => pasoActual--);
+                      setModalState(() => pasoActual--);
                     } else {
                       Navigator.pop(context);
                     }
                   },
                   controlsBuilder: (context, details) {
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (pasoActual > 0)
-                          TextButton(
-                            onPressed: details.onStepCancel,
-                            child: const Text('Volver'),
-                          ),
-                        ElevatedButton.icon(
-                          onPressed: details.onStepContinue,
-                          icon: const Icon(Icons.navigate_next),
-                          label: Text(
-                            pasoActual < 2 ? 'Siguiente' : 'Finalizar',
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.tealAccent.withOpacity(0.2),
-                            foregroundColor: Colors.tealAccent,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                  steps: [
-                    // Paso 1 — Descripción de falla
-                    Step(
-                      title: const Text('Identificación de la falla'),
-                      content: Column(
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          _campo(
-                            fallaCtrl,
-                            'Descripción del problema',
-                            Icons.warning,
-                          ),
-                          const SizedBox(height: 10),
-                          _campo(
-                            causasCtrl,
-                            'Posibles causas',
-                            Icons.lightbulb_outline,
+                          if (pasoActual > 0)
+                            TextButton(
+                              onPressed: details.onStepCancel,
+                              child: const Text('Volver', style: TextStyle(color: Colors.white60)),
+                            )
+                          else
+                            const SizedBox.shrink(),
+                          ElevatedButton.icon(
+                            onPressed: details.onStepContinue,
+                            icon: Icon(pasoActual < 2 ? Icons.navigate_next : Icons.check_circle_outline),
+                            label: Text(pasoActual < 2 ? 'Siguiente' : 'Validar Pasos'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.tealAccent.withOpacity(0.2),
+                              foregroundColor: Colors.tealAccent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
                           ),
                         ],
                       ),
+                    );
+                  },
+                  steps: [
+                    // --- PASO 1: EVALUACIÓN Y CAUSAS ---
+                    Step(
+                      title: const Text('Hallazgos de Laboratorio'),
+                      content: Column(
+                        children: [
+                          _campo(fallaCtrl, 'Falla técnica verificada', Icons.bug_report, maxLines: 2),
+                          const SizedBox(height: 8),
+                          _campo(causasCtrl, 'Origen / Causas del daño (ej: humedad, alza voltaje)', Icons.bolt, maxLines: 2),
+                        ],
+                      ),
                       isActive: pasoActual >= 0,
-                      state: pasoActual > 0
-                          ? StepState.complete
-                          : StepState.editing,
+                      state: pasoActual > 0 ? StepState.complete : StepState.editing,
                     ),
 
-                    // Paso 2 — Pruebas
+                    // --- PASO 2: PRUEBAS Y EVIDENCIA VISUAL ---
                     Step(
-                      title: const Text('Pruebas realizadas'),
+                      title: const Text('Inspección y Banco de Pruebas'),
                       content: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: -8,
-                            children: pruebasDisponibles.map((prueba) {
-                              final activo = pruebasSeleccionadas.contains(
-                                prueba,
-                              );
-                              return FilterChip(
-                                label: Text(
-                                  prueba,
-                                  style: TextStyle(
-                                    color: activo
-                                        ? Colors.black
-                                        : Colors.white70,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                selected: activo,
-                                backgroundColor: AppColors.fondo.withOpacity(
-                                  0.6,
-                                ),
-                                selectedColor: Colors.tealAccent,
-                                onSelected: (val) {
-                                  setState(() {
-                                    if (val) {
-                                      pruebasSeleccionadas.add(prueba);
-                                    } else {
-                                      pruebasSeleccionadas.remove(prueba);
-                                    }
-                                  });
-                                },
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Repuestos sugeridos',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          const Text('Resultado de Testeos:', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          ...pruebasDisponibles.map((prueba) {
+                            final estado = estadosPruebas[prueba];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Expanded(child: Text(prueba, style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(Icons.check_circle, color: estado == true ? Colors.green : Colors.white24, size: 20),
+                                        onPressed: () => setModalState(() => estadosPruebas[prueba] = true),
+                                        tooltip: 'Pasa el test',
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.cancel, color: estado == false ? Colors.redAccent : Colors.white24, size: 20),
+                                        onPressed: () => setModalState(() => estadosPruebas[prueba] = false),
+                                        tooltip: 'Falla detectada',
+                                      ),
+                                    ],
+                                  )
+                                ],
                               ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.add_circle_outline,
-                                  color: Colors.tealAccent,
-                                ),
-                                onPressed: () async {
-                                  await mostrarRepuestoModal(
-                                    context: context,
-                                    idReferencia: idIngreso,
-                                    origen: 'diagnostico',
-                                  );
-                                  setState(() {});
-                                },
+                            );
+                          }),
+                          const Divider(color: Colors.white24, height: 20),
+                          // Captura de evidencia interna
+                          const Text('Evidencia del daño (Foto interna)', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          GestureDetector(
+                            onTap: capturarFotoFalla,
+                            child: Container(
+                              width: double.infinity,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: Colors.black26,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: fotoFalla != null ? Colors.tealAccent : Colors.white24),
                               ),
-                            ],
-                          ),
-                          FutureBuilder<List<dynamic>>(
-                            future: repuestoDao.listarPorDiagnostico(idIngreso),
-                            builder: (context, snapshot) {
-                              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                                return const Text(
-                                  'Sin repuestos sugeridos',
-                                  style: TextStyle(color: Colors.white54),
-                                );
-                              }
-
-                              final items = snapshot.data!;
-                              return Column(
-                                children: items.map((m) {
-                                  final r = Repuesto.fromMap(m);
-                                  return ListTile(
-                                    dense: true,
-                                    leading: const Icon(
-                                      Icons.memory,
-                                      color: Colors.tealAccent,
+                              child: fotoFalla != null
+                                  ? ClipRRect(borderRadius: BorderRadius.circular(11), child: Image.file(fotoFalla!, fit: BoxFit.cover))
+                                  : const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.add_a_photo_outlined, color: Colors.tealAccent, size: 22),
+                                        SizedBox(width: 8),
+                                        Text('Capturar componente dañado', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                      ],
                                     ),
-                                    title: Text(
-                                      r.nombre ?? '',
-                                      style: const TextStyle(color: Colors.white),
-                                    ),
-                                    subtitle: Text(
-                                      'Cantidad: ${r.cantidad} | Estado: ${r.estado}',
-                                      style: const TextStyle(color: Colors.white54),
-                                    ),
-                                  );
-                                }).toList(),
-                              );
-                            },
+                            ),
                           ),
                         ],
                       ),
                       isActive: pasoActual >= 1,
-                      state: pasoActual > 1
-                          ? StepState.complete
-                          : StepState.editing,
+                      state: pasoActual > 1 ? StepState.complete : StepState.editing,
                     ),
 
-                    // Paso 3 — Conclusiones
+                    // --- PASO 3: PARÁMETROS COMERCIALES Y CIERRE ---
                     Step(
-                      title: const Text('Conclusiones y técnico responsable'),
+                      title: const Text('Estimación y Complejidad'),
                       content: Column(
                         children: [
-                          _campo(
-                            conclusionesCtrl,
-                            'Conclusión técnica / resultado',
-                            Icons.fact_check_outlined,
-                          ),
+                          _campo(conclusionesCtrl, 'Dictamen final / Solución recomendada', Icons.gavel_rounded, maxLines: 2),
+                          const SizedBox(height: 10),
+                          // SOLUCIÓN AL OVERFLOW: Columna en lugar de Fila
+                          Column(
+                            children: [
+                              _campo(horasCtrl, 'Horas de Mano de Obra (Ej: 1.5)', Icons.hourglass_top, keyboardType: TextInputType.number),
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                value: complejidadSeleccionada,
+                                dropdownColor: AppColors.fondo,
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                decoration: InputDecoration(
+                                  labelText: 'Riesgo / Complejidad',
+                                  labelStyle: const TextStyle(color: Colors.white70),
+                                  prefixIcon: const Icon(Icons.equalizer, color: Colors.tealAccent, size: 18),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                items: ['bajo', 'medio', 'alto', 'critico'].map((c) {
+                                  return DropdownMenuItem(value: c, child: Text(c.toUpperCase()));
+                                }).toList(),
+                                onChanged: (val) => setModalState(() => complejidadSeleccionada = val!),
+                              ),
+                            ],
+                          ),  
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
                             value: tecnicoSeleccionado,
                             dropdownColor: AppColors.fondo,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
                             decoration: InputDecoration(
-                              labelText: 'Técnico responsable',
+                              labelText: 'Técnico asignado',
                               labelStyle: const TextStyle(color: Colors.white70),
-                              prefixIcon: const Icon(
-                                Icons.engineering,
-                                color: Colors.tealAccent,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              focusedBorder: const OutlineInputBorder(
-                                borderSide: BorderSide(color: Colors.tealAccent),
-                              ),
+                              prefixIcon: const Icon(Icons.engineering, color: Colors.tealAccent, size: 18),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            items: tecnicos.map((t) {
-                              return DropdownMenuItem(value: t, child: Text(t));
-                            }).toList(),
-                            onChanged: (val) {
-                              setState(() => tecnicoSeleccionado = val);
-                            },
+                            items: tecnicos.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                            onChanged: (val) => setModalState(() => tecnicoSeleccionado = val),
                           ),
                         ],
                       ),
@@ -289,63 +253,72 @@ Future<void> mostrarDiagnosticoModal(
                 ),
               ),
             ),
+            actionsAlignment: MainAxisAlignment.spaceBetween,
             actions: [
               TextButton.icon(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close, color: Colors.redAccent),
-                label: const Text('Cancelar'),
+                label: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
               ),
               ElevatedButton.icon(
-                icon: const Icon(Icons.save),
-                label: const Text('Guardar diagnóstico'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.tealAccent.withOpacity(0.2),
-                  foregroundColor: Colors.tealAccent,
-                ),
+                icon: const Icon(Icons.save_as_outlined),
+                label: const Text('Guardar informe'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.tealAccent, foregroundColor: Colors.black),
                 onPressed: () async {
-                  if (fallaCtrl.text.trim().isEmpty ||
-                      tecnicoSeleccionado == null ||
-                      pruebasSeleccionadas.isEmpty) {
+                  if (fallaCtrl.text.trim().isEmpty || conclusionesCtrl.text.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Completa los campos requeridos antes de guardar'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
+                      const SnackBar(content: Text('⚠️ Rellena la Falla y el Dictamen Final antes de guardar.')),
                     );
                     return;
                   }
 
-                  // Estructuramos el mapa con la nomenclatura exacta de Laravel/HeidiSQL
-                  final diagnosticoParaLaravel = {
+                  // Formateamos las pruebas realizadas
+                  List<String> resumenPruebas = [];
+                  estadosPruebas.forEach((prueba, estado) {
+                    if (estado != null) {
+                      resumenPruebas.add('$prueba: ${estado ? "[PASÓ]" : "[FALLÓ]"}');
+                    }
+                  });
+
+                  final diagnosticoData = {
                     'ingreso_id': idIngreso,
-                    'tecnico_id': 1, // Forzado temporalmente hasta acoplar Auth completo
+                    'tecnico_id': 1, 
                     'descripcion_falla': fallaCtrl.text.trim(),
-                    'pruebas_realizadas': pruebasSeleccionadas.join(', '),
+                    'posibles_causas': causasCtrl.text.trim().isEmpty ? 'No determinadas' : causasCtrl.text.trim(),
+                    'pruebas_realizadas': resumenPruebas.isEmpty ? 'Inspección visual estándar' : resumenPruebas.join(' | '),
                     'conclusiones': conclusionesCtrl.text.trim(),
+                    'tiempo_estimado_hrs': double.tryParse(horasCtrl.text) ?? 1.0,
+                    'complejidad': complejidadSeleccionada,
                     'estado': 'diagnosticado',
-                    'creado_en': DateTime.now().toIso8601String(),
                   };
 
                   try {
                     final provider = context.read<HelpdeskProvider>();
-                    final exito = await provider.agregarDiagnostico(diagnosticoParaLaravel);
+                    final exito = await provider.agregarDiagnostico(diagnosticoData);
 
                     if (exito && context.mounted) {
+                      // 1. Cerramos el modal inmediatamente
                       Navigator.pop(context);
+
+                      // 2. Notificamos éxito del diagnóstico
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('✅ Diagnóstico registrado exitosamente'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
+                        const SnackBar(content: Text('⚡ Diagnóstico procesado con éxito.')),
                       );
+
+                      // 3. Subimos la evidencia física amarrada al ingreso (Anti Race-Condition)
+                      if (fotoFalla != null) {
+                        await provider.asociarDocumentoAEntidad(
+                          tipo: 'ingreso', // Vinculamos a 'ingreso' que ya sabemos que existe y tenemos su ID
+                          id: idIngreso,
+                          rutaLocal: fotoFalla!.path,
+                          nombrePersonalizado: 'evidencia_laboratorio_ingreso_$idIngreso.jpg',
+                        );
+                      }
                     }
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error al guardar diagnóstico: $e'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
+                        SnackBar(content: Text('❌ Error en el flujo: $e'), backgroundColor: Colors.redAccent),
                       );
                     }
                   }
@@ -359,20 +332,22 @@ Future<void> mostrarDiagnosticoModal(
   );
 }
 
-Widget _campo(TextEditingController ctrl, String label, IconData icono) {
+Widget _campo(TextEditingController ctrl, String label, IconData icono, {int maxLines = 1, TextInputType keyboardType = TextInputType.text}) {
   return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
+    padding: const EdgeInsets.symmetric(vertical: 5),
     child: TextField(
       controller: ctrl,
-      style: const TextStyle(color: Colors.white),
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      style: const TextStyle(color: Colors.white, fontSize: 13),
       decoration: InputDecoration(
-        prefixIcon: Icon(icono, color: Colors.tealAccent),
+        prefixIcon: Icon(icono, color: Colors.tealAccent, size: 18),
         labelText: label,
         labelStyle: const TextStyle(color: Colors.white70),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        focusedBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.tealAccent),
-        ),
+        filled: true,
+        fillColor: Colors.black12,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.tealAccent, width: 1)),
       ),
     ),
   );

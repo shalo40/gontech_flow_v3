@@ -1,730 +1,307 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart'; // <-- Inyección del Provider
-import '../../../core/dao/diagnostico_dao.dart';
-import '../../../core/dao/ingreso_dao.dart';
-import '../../../core/dao/repuesto_dao.dart';
-import '../../../core/models/repuesto.dart';
-import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
+import 'package:provider/provider.dart';
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../theme/app_colors.dart';
 import 'presupuesto_modal.dart';
 
-class DiagnosticoDetalleScreen extends StatefulWidget {
+class DiagnosticoDetalleScreen extends StatelessWidget {
   final Map<String, dynamic> diagnostico;
 
   const DiagnosticoDetalleScreen({super.key, required this.diagnostico});
 
-  @override
-  State<DiagnosticoDetalleScreen> createState() =>
-      _DiagnosticoDetalleScreenState();
-}
-
-class _DiagnosticoDetalleScreenState extends State<DiagnosticoDetalleScreen> {
-  final _dao = DiagnosticoDao();
-  final _ingresoDao = IngresoDAO();
-  final _repuestoDao = RepuestoDao(); // Mantenemos el DAO de repuestos hasta migrar ese módulo
-
-  late Map<String, dynamic> _d;
-  List<Repuesto> _repuestos = [];
-  bool _loadingRepuestos = true;
-
-  static const _colorModulo = Colors.tealAccent;
-
-  @override
-  void initState() {
-    super.initState();
-    _d = widget.diagnostico;
-    _cargarRepuestos();
-  }
-
-  // --- Buscador inteligente para API (Anidado) o Local (Plano) ---
-  String _getNested(String localKey, List<String> apiPath, [String fallback = '']) {
-    if (_d.containsKey(localKey) && _d[localKey] != null) {
-      return _d[localKey].toString();
-    }
-    dynamic current = _d;
-    for (final key in apiPath) {
+  // --- Helpers de Extracción Laravel ---
+  String _getNested(Map<String, dynamic> d, List<String> path, [String fallback = '']) {
+    dynamic current = d;
+    for (final key in path) {
       if (current == null || current[key] == null) return fallback;
       current = current[key];
     }
     return current.toString().isNotEmpty ? current.toString() : fallback;
   }
 
-  int _getId() {
-    return int.tryParse((_d['id_diagnostico'] ?? _d['id'] ?? '0').toString()) ?? 0;
-  }
-  // ---------------------------------------------------------------
-
-  Future<void> _cargarRepuestos() async {
-    setState(() => _loadingRepuestos = true);
-    try {
-      final idDiag = _getId();
-      final data = await _repuestoDao.listarPorDiagnostico(idDiag);
-      if (!mounted) return;
-      setState(() {
-        _repuestos = data.map((m) => Repuesto.fromMap(m)).toList();
-        _loadingRepuestos = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loadingRepuestos = false);
-    }
-  }
-
-  Color _colorEstado(String? estado) {
-    switch (estado) {
-      case 'pendiente':
-        return Colors.amberAccent;
-      case 'diagnosticado':
-        return _colorModulo;
-      case 'en_revision':
-        return Colors.blueAccent;
-      case 'finalizado':
-        return Colors.greenAccent;
-      default:
-        return Colors.white54;
-    }
-  }
-
-  IconData _iconoEstado(String? estado) {
-    switch (estado) {
-      case 'pendiente':
-        return Icons.pending_actions;
-      case 'diagnosticado':
-        return Icons.biotech;
-      case 'en_revision':
-        return Icons.search;
-      case 'finalizado':
-        return Icons.check_circle;
-      default:
-        return Icons.info_outline;
-    }
-  }
-
-  String _textoEstado(String estado) {
-    switch (estado) {
-      case 'pendiente':
-        return 'Pendiente';
-      case 'diagnosticado':
-        return 'Diagnosticado';
-      case 'en_revision':
-        return 'En revision';
-      case 'finalizado':
-        return 'Finalizado';
-      default:
-        return 'Desconocido';
-    }
-  }
+  int _getId() => int.tryParse((diagnostico['id_diagnostico'] ?? diagnostico['id'] ?? '0').toString()) ?? 0;
 
   @override
   Widget build(BuildContext context) {
-    final estado = _d['estado'] ?? 'pendiente';
-    final colorEst = _colorEstado(estado);
+    final d = diagnostico;
+    final idDiag = _getId();
+    final estado = (d['estado'] ?? 'diagnosticado').toString().toLowerCase();
+    
+    // Extracción de datos del equipo
+    final tipo = _getNested(d, ['ingreso', 'equipo', 'tipo_equipo'], 'Equipo');
+    final marca = _getNested(d, ['ingreso', 'equipo', 'marca'], '');
+    final modelo = _getNested(d, ['ingreso', 'equipo', 'modelo'], '');
+    final cliente = _getNested(d, ['ingreso', 'equipo', 'cliente', 'nombre'], 'Sin cliente');
 
-    String fechaStr = '';
-    try {
-      final rawFecha = _d['creado_en'] ?? _d['created_at'] ?? '';
-      fechaStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(rawFecha));
-    } catch (_) {
-      fechaStr = 'Sin fecha';
-    }
+    // Fechas
+    final rawFecha = d['creado_en'] ?? d['created_at'] ?? '';
+    final fechaStr = rawFecha.isNotEmpty ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(rawFecha)) : 'Fecha desconocida';
 
     return Scaffold(
       backgroundColor: AppColors.fondo,
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(estado, colorEst),
-          SliverToBoxAdapter(child: _buildStatusSection(estado, colorEst, fechaStr)),
-          SliverToBoxAdapter(child: _buildEquipoSection()),
-          SliverToBoxAdapter(child: _buildFallaSection()),
-          SliverToBoxAdapter(child: _buildPruebasSection()),
-          SliverToBoxAdapter(child: _buildConclusionesSection()),
-          SliverToBoxAdapter(child: _buildRepuestosSection()),
-          SliverToBoxAdapter(child: _buildActionsSection(estado)),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text('Informe de Laboratorio', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            tooltip: 'Eliminar informe',
+            onPressed: () => _confirmarEliminacion(context, idDiag),
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _buildAppBar(String estado, Color colorEst) {
-    final idDiag = _getId();
-    final tipo = _getNested('tipo_equipo', ['ingreso', 'equipo', 'tipo_equipo']);
-    final marca = _getNested('marca', ['ingreso', 'equipo', 'marca']);
-
-    return SliverAppBar(
-      expandedHeight: 180,
-      pinned: true,
-      backgroundColor: AppColors.fondo,
-      foregroundColor: Colors.white,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                colorEst.withValues(alpha: 0.25),
-                AppColors.fondo,
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 40),
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: colorEst.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(Icons.biotech, color: colorEst, size: 32),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Diagnostico #$idDiag',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  '$tipo $marca',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────
-  // STATUS
-  // ──────────────────────────────────────────
-  Widget _buildStatusSection(String estado, Color colorEst, String fechaStr) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colorEst.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colorEst.withValues(alpha: 0.25)),
-        ),
-        child: Row(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(_iconoEstado(estado), color: colorEst, size: 28),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // 🏷️ CABECERA: EQUIPO Y ESTADO
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [Colors.tealAccent.withOpacity(0.15), Colors.transparent], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.tealAccent.withOpacity(0.3)),
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    _textoEstado(estado),
-                    style: TextStyle(
-                      color: colorEst,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.biotech, color: Colors.tealAccent, size: 32),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Creado: $fechaStr',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.4),
-                      fontSize: 12,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Folio #$idDiag', style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                        const SizedBox(height: 4),
+                        Text('$tipo $marca $modelo', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text('Propietario: $cliente', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            _buildProgressDots(estado),
+            const SizedBox(height: 24),
+
+            // 🔬 SECCIÓN 1: HALLAZGOS (Falla y Causas)
+            _SeccionTitulo(titulo: '1. Hallazgos Técnicos', icono: Icons.bug_report),
+            _TarjetaInfo(
+              hijos: [
+                _DatoFila(label: 'Falla verificada:', valor: d['descripcion_falla'] ?? 'No especificada', colorValor: Colors.orangeAccent),
+                const Divider(color: Colors.white12, height: 24),
+                _DatoFila(label: 'Causa raíz (Origen):', valor: d['posibles_causas'] ?? 'No determinadas', colorValor: Colors.white),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // 🧪 SECCIÓN 2: BANCO DE PRUEBAS
+            _SeccionTitulo(titulo: '2. Banco de Pruebas', icono: Icons.checklist_rtl),
+            _TarjetaInfo(
+              hijos: _construirListaPruebas(d['pruebas_realizadas']?.toString() ?? ''),
+            ),
+            const SizedBox(height: 20),
+
+            // ⚖️ SECCIÓN 3: DICTAMEN Y PROYECCIÓN COMERCIAL
+            _SeccionTitulo(titulo: '3. Resolución y Esfuerzo', icono: Icons.gavel_rounded),
+            _TarjetaInfo(
+              hijos: [
+                _DatoFila(label: 'Conclusión:', valor: d['conclusiones'] ?? 'Sin dictamen', colorValor: Colors.greenAccent),
+                const Divider(color: Colors.white12, height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _MiniBadge(label: 'Mano de Obra', valor: '${d['tiempo_estimado_hrs'] ?? 1.0} hrs', icono: Icons.schedule),
+                    _MiniBadge(label: 'Riesgo', valor: (d['complejidad'] ?? 'Medio').toString().toUpperCase(), icono: Icons.equalizer, esRiesgo: true),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildProgressDots(String estadoActual) {
-    final estados = ['pendiente', 'diagnosticado', 'en_revision', 'finalizado'];
-    final idx = estados.indexOf(estadoActual).clamp(0, estados.length - 1);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(estados.length, (i) {
-        final completado = i <= idx;
-        return Container(
-          width: 10,
-          height: 10,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: completado
-                ? _colorEstado(estados[i])
-                : Colors.white.withValues(alpha: 0.15),
-          ),
-        );
-      }),
-    );
-  }
-
-  // ──────────────────────────────────────────
-  // EQUIPO / CLIENTE
-  // ──────────────────────────────────────────
-  Widget _buildEquipoSection() {
-    final tipo = _getNested('tipo_equipo', ['ingreso', 'equipo', 'tipo_equipo']);
-    final marca = _getNested('marca', ['ingreso', 'equipo', 'marca']);
-    final modelo = _getNested('modelo', ['ingreso', 'equipo', 'modelo']);
-    final ns = _getNested('numero_serie', ['ingreso', 'equipo', 'numero_serie']);
-    final cliente = _getNested('nombre_cliente', ['ingreso', 'equipo', 'cliente', 'nombre'], 'Sin cliente');
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _seccionTitulo('Equipo y cliente'),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: Column(
-              children: [
-                _infoRow(Icons.devices, 'Equipo', '$tipo $marca $modelo'),
-                if (ns.isNotEmpty)
-                  _infoRow(Icons.qr_code_2, 'N/S', ns),
-                _infoRow(Icons.person_outline, 'Cliente', cliente),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────
-  // FALLA
-  // ──────────────────────────────────────────
-  Widget _buildFallaSection() {
-    final falla = _d['descripcion_falla'] ?? 'Sin descripcion';
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _seccionTitulo('Descripcion de la falla'),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.redAccent.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: Colors.redAccent.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.warning_amber,
-                    color: Colors.redAccent.withValues(alpha: 0.7),
-                    size: 22),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    falla,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────
-  // PRUEBAS REALIZADAS (CHECKLIST VISUAL)
-  // ──────────────────────────────────────────
-  Widget _buildPruebasSection() {
-    final pruebas = (_d['pruebas_realizadas'] ?? '').toString();
-    final lista =
-        pruebas.isNotEmpty ? pruebas.split(', ') : <String>[];
-
-    if (lista.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: _seccionTitulo('Pruebas realizadas')),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _colorModulo.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${lista.length} prueba${lista.length > 1 ? 's' : ''}',
-                  style: const TextStyle(
-                    color: _colorModulo,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...lista.map((prueba) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: _colorModulo.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: _colorModulo.withValues(alpha: 0.12)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: _colorModulo.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(Icons.check,
-                            color: _colorModulo, size: 16),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          prueba.trim(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────
-  // CONCLUSIONES
-  // ──────────────────────────────────────────
-  Widget _buildConclusionesSection() {
-    final conclusiones = _d['conclusiones'] ?? '';
-    if (conclusiones.toString().trim().isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _seccionTitulo('Conclusiones'),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: Colors.blueAccent.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.lightbulb_outline,
-                    color: Colors.blueAccent.withValues(alpha: 0.7),
-                    size: 22),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    conclusiones,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────
-  // REPUESTOS
-  // ──────────────────────────────────────────
-  Widget _buildRepuestosSection() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: _seccionTitulo('Repuestos sugeridos')),
-              if (_repuestos.isNotEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.purpleAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_repuestos.length}',
-                    style: const TextStyle(
-                      color: Colors.purpleAccent,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (_loadingRepuestos)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child:
-                    CircularProgressIndicator(color: _colorModulo, strokeWidth: 2),
-              ),
-            )
-          else if (_repuestos.isEmpty)
-            Container(
+      
+      // 🚀 BOTÓN FLOTANTE COMERCIAL
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: estado == 'diagnosticado' 
+        ? Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: SizedBox(
               width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Text(
-                'Sin repuestos asociados a este diagnostico',
-                textAlign: TextAlign.center,
-                style:
-                    TextStyle(color: Colors.white.withValues(alpha: 0.3)),
-              ),
-            )
-          else
-            ..._repuestos.map((r) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color:
-                              Colors.purpleAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.memory,
-                            color: Colors.purpleAccent, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              r.nombre ?? 'Sin nombre',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Cantidad: ${r.cantidad} | ${r.estado}',
-                              style: TextStyle(
-                                color:
-                                    Colors.white.withValues(alpha: 0.5),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (r.costoUnitario != null && r.costoUnitario! > 0)
-                        Text(
-                          '\$${r.costoUnitario!.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            color: _colorModulo,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                    ],
-                  ),
-                )),
-        ],
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────
-  // ACCIONES
-  // ──────────────────────────────────────────
-  Widget _buildActionsSection(String estado) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _seccionTitulo('Acciones'),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              if (estado != 'finalizado')
-                _actionButton(
-                  Icons.attach_money,
-                  'Crear presupuesto',
-                  Colors.greenAccent,
-                  () async {
-                    await mostrarPresupuestoModal(
-                      context,
-                      _getId(),
-                    );
-                    if (mounted) Navigator.pop(context);
-                  },
+              height: 54,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.monetization_on, size: 22),
+                label: const Text('Generar Presupuesto', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.tealAccent,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 8,
                 ),
-              if (estado != 'finalizado')
-                _actionButton(
-                  Icons.check_circle,
-                  'Finalizar',
-                  _colorModulo,
-                  () async {
-                    await _dao.actualizarEstado(_getId(), 'finalizado');
-                    if (mounted) {
-                      // Recargamos el Provider globalmente
-                      await context.read<HelpdeskProvider>().recargarDiagnosticos();
-                      Navigator.pop(context);
-                    }
-                  },
-                ),
-              _actionButton(
-                Icons.delete_forever,
-                'Eliminar',
-                Colors.redAccent,
-                () async {
-                  await _dao.eliminar(_getId());
-                  if (mounted) {
-                    // Recargamos el Provider globalmente
+                onPressed: () async {
+                  await mostrarPresupuestoModal(context, idDiag);
+                  if (context.mounted) {
                     await context.read<HelpdeskProvider>().recargarDiagnosticos();
-                    Navigator.pop(context);
+                    Navigator.pop(context); // Vuelve a la lista tras presupuestar
                   }
                 },
               ),
-            ],
+            ),
+          )
+        : null, // Si ya está cotizado, no mostramos el botón
+    );
+  }
+
+  // --- Widgets Auxiliares Modulares ---
+
+  List<Widget> _construirListaPruebas(String pruebasRaw) {
+    if (pruebasRaw.isEmpty || pruebasRaw == 'Inspección visual estándar') {
+      return [const Text('Solo se realizó inspección visual básica.', style: TextStyle(color: Colors.white54, fontSize: 13))];
+    }
+
+    // Separamos por el delimitador " | " que pusimos en el modal
+    final lista = pruebasRaw.split(' | ');
+    return lista.map((p) {
+      final esExito = p.contains('[PASÓ]');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(esExito ? Icons.check_circle : Icons.cancel, color: esExito ? Colors.green : Colors.redAccent, size: 16),
+            const SizedBox(width: 8),
+            Expanded(child: Text(p.replaceAll('[PASÓ]', '').replaceAll('[FALLÓ]', '').trim(), style: const TextStyle(color: Colors.white70, fontSize: 13))),
+          ],
+        ),
+      );
+    }).toList();
+  }
+
+  Future<void> _confirmarEliminacion(BuildContext context, int idDiag) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.fondo,
+        title: const Text('¿Eliminar informe?', style: TextStyle(color: Colors.white)),
+        content: const Text('Esta acción no se puede deshacer.', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
-  }
 
-  Widget _actionButton(
-      IconData icon, String label, Color color, VoidCallback onTap) {
-    return ElevatedButton.icon(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color.withValues(alpha: 0.15),
-        foregroundColor: color,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      onPressed: onTap,
-    );
+    if (confirmar == true && context.mounted) {
+      // Aquí asumo que agregarás 'eliminarDiagnostico' a tu HelpdeskProvider pronto. 
+      // Por ahora simulamos el pop.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Función de eliminación en construcción...')));
+    }
   }
+}
 
-  // ──────────────────────────────────────────
-  // HELPERS
-  // ──────────────────────────────────────────
-  Widget _infoRow(IconData icon, String label, String value) {
-    if (value.trim().isEmpty) return const SizedBox.shrink();
+class _SeccionTitulo extends StatelessWidget {
+  final String titulo;
+  final IconData icono;
+  const _SeccionTitulo({required this.titulo, required this.icono});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
       child: Row(
         children: [
-          Icon(icon,
-              color: _colorModulo.withValues(alpha: 0.6), size: 18),
-          const SizedBox(width: 10),
-          Text(
-            '$label: ',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
-              fontSize: 12,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-            ),
-          ),
+          Icon(icono, color: Colors.white54, size: 18),
+          const SizedBox(width: 8),
+          Text(titulo.toUpperCase(), style: const TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
         ],
       ),
     );
   }
+}
 
-  Widget _seccionTitulo(String texto) {
-    return Text(
-      texto.toUpperCase(),
-      style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.4),
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1.5,
+class _TarjetaInfo extends StatelessWidget {
+  final List<Widget> hijos;
+  const _TarjetaInfo({required this.hijos});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: hijos),
+    );
+  }
+}
+
+class _DatoFila extends StatelessWidget {
+  final String label;
+  final String valor;
+  final Color colorValor;
+  const _DatoFila({required this.label, required this.valor, required this.colorValor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(valor, style: TextStyle(color: colorValor, fontSize: 14, fontWeight: FontWeight.w500, height: 1.4)),
+      ],
+    );
+  }
+}
+
+class _MiniBadge extends StatelessWidget {
+  final String label;
+  final String valor;
+  final IconData icono;
+  final bool esRiesgo;
+
+  const _MiniBadge({required this.label, required this.valor, required this.icono, this.esRiesgo = false});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color = Colors.tealAccent;
+    if (esRiesgo) {
+      if (valor == 'ALTO' || valor == 'CRITICO') color = Colors.redAccent;
+      else if (valor == 'MEDIO') color = Colors.orangeAccent;
+      else color = Colors.greenAccent;
+    }
+
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+          child: Icon(icono, color: color, size: 16),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+            Text(valor, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ],
     );
   }
 }

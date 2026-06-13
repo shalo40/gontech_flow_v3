@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart'; // <-- Inyección del Provider
-import '../../../core/dao/reparacion_dao.dart';
-import '../../../core/dao/repuesto_dao.dart';
-import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
+import 'package:provider/provider.dart';
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
-import '../../reports/pdf_reparacion.dart';
-import '../../reports/pdf_utils.dart';
-import 'repuestos_screen.dart';
-import '../../../core/dao/entrega_dao.dart';
-import '../../../core/dao/ingreso_dao.dart';
-import '../../../core/models/entrega.dart';
+// import 'reparacion_detalle_screen.dart'; // <-- Lo crearemos en el próximo paso
 
 class ReparacionesScreen extends StatefulWidget {
   const ReparacionesScreen({super.key});
@@ -21,12 +14,8 @@ class ReparacionesScreen extends StatefulWidget {
 }
 
 class _ReparacionesScreenState extends State<ReparacionesScreen> {
-  final dao = ReparacionDao();
-  List<Map<String, dynamic>> _repuestosGlobal = [];
   String filtroEstado = 'todos';
-  String criterioOrden = 'reciente';
   String busqueda = '';
-  final formatoFecha = DateFormat('dd/MM/yyyy HH:mm');
 
   @override
   void initState() {
@@ -37,568 +26,350 @@ class _ReparacionesScreenState extends State<ReparacionesScreen> {
   }
 
   Future<void> _cargar() async {
-    // Recargamos las reparaciones desde el provider
     await context.read<HelpdeskProvider>().recargarReparaciones();
-    // Mantenemos repuestos local hasta migrar su módulo
-    final repDao = RepuestoDao();
-    final repData = await repDao.listarDetallado();
-    if (mounted) {
-      setState(() {
-        _repuestosGlobal = repData;
-      });
-    }
   }
 
-  // --- Helpers de compatibilidad API / Local ---
-  String _getNested(Map<String, dynamic> r, String localKey, List<String> apiPath, [String fallback = '']) {
-    if (r.containsKey(localKey) && r[localKey] != null && r[localKey].toString().isNotEmpty) {
-      return r[localKey].toString();
+  // --- Helpers de Extracción Segura para Árbol Laravel ---
+  String _getCliente(Map<String, dynamic> r) {
+    if (r['diagnostico'] != null && r['diagnostico']['ingreso'] != null && r['diagnostico']['ingreso']['equipo'] != null && r['diagnostico']['ingreso']['equipo']['cliente'] != null) {
+      return r['diagnostico']['ingreso']['equipo']['cliente']['nombre'] ?? 'Cliente Desconocido';
     }
-    dynamic current = r;
-    for (final key in apiPath) {
-      if (current == null || current[key] == null) return fallback;
-      current = current[key];
-    }
-    return current.toString().isNotEmpty ? current.toString() : fallback;
+    return 'Cliente Desconocido';
   }
 
-  int _getId(Map<String, dynamic> r) {
-    return int.tryParse((r['id_reparacion'] ?? r['id'] ?? '0').toString()) ?? 0;
-  }
-
-  int _getDiagnosticoId(Map<String, dynamic> r) {
-    return int.tryParse((r['id_diagnostico'] ?? r['diagnostico_id'] ?? '0').toString()) ?? 0;
-  }
-  
-  int _getIngresoId(Map<String, dynamic> r) {
-    if (r['id_ingreso'] != null) return int.tryParse(r['id_ingreso'].toString()) ?? 0;
-    if (r['diagnostico'] != null && r['diagnostico']['ingreso_id'] != null) {
-      return int.tryParse(r['diagnostico']['ingreso_id'].toString()) ?? 0;
+  String _getEquipoStr(Map<String, dynamic> r) {
+    if (r['diagnostico'] != null && r['diagnostico']['ingreso'] != null && r['diagnostico']['ingreso']['equipo'] != null) {
+      final eq = r['diagnostico']['ingreso']['equipo'];
+      return '${eq['tipo_equipo'] ?? ''} ${eq['marca'] ?? ''} ${eq['modelo'] ?? ''}'.trim();
     }
-    return 0;
+    return 'Equipo Desconocido';
   }
-  // ---------------------------------------------
 
+  String _getFalla(Map<String, dynamic> r) {
+    if (r['diagnostico'] != null) {
+      return r['diagnostico']['descripcion_falla'] ?? 'Sin detalle de falla';
+    }
+    return 'Sin detalle';
+  }
+
+  int _getId(Map<String, dynamic> r) => int.tryParse((r['id_reparacion'] ?? r['id'] ?? '0').toString()) ?? 0;
+
+  // --- Helpers Visuales ---
   Color _colorEstado(String estado) {
-    switch (estado) {
-      case 'en_proceso':
-        return Colors.amberAccent;
-      case 'finalizada':
-        return Colors.greenAccent;
-      default:
-        return Colors.white70;
+    switch (estado.toLowerCase()) {
+      case 'por_iniciar': return Colors.redAccent;
+      case 'en_proceso': return Colors.amberAccent;
+      case 'finalizada': return Colors.greenAccent;
+      case 'entregada': return Colors.blueAccent;
+      default: return Colors.white54;
     }
   }
 
   IconData _iconoEstado(String estado) {
-    switch (estado) {
-      case 'en_proceso':
-        return Icons.timelapse;
-      case 'finalizada':
-        return Icons.check_circle;
-      default:
-        return Icons.build;
+    switch (estado.toLowerCase()) {
+      case 'por_iniciar': return Icons.power_settings_new;
+      case 'en_proceso': return Icons.engineering;
+      case 'finalizada': return Icons.verified;
+      case 'entregada': return Icons.rocket_launch;
+      default: return Icons.build;
     }
-  }
-
-  List<Map<String, dynamic>> _filtrarYOrdenar(List<Map<String, dynamic>> reparaciones) {
-    var lista = reparaciones.where((r) {
-      final estado = r['estado'] ?? '';
-      final cliente = _getNested(r, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre']).toLowerCase();
-      final marca = _getNested(r, 'marca', ['diagnostico', 'ingreso', 'equipo', 'marca']).toLowerCase();
-      final query = busqueda.toLowerCase();
-
-      final coincideBusqueda =
-          cliente.contains(query) || marca.contains(query) || query.isEmpty;
-      final coincideEstado = filtroEstado == 'todos' || estado == filtroEstado;
-
-      return coincideBusqueda && coincideEstado;
-    }).toList();
-
-    if (criterioOrden == 'nombre') {
-      lista.sort(
-        (a, b) => _getNested(a, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre'])
-            .compareTo(_getNested(b, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre'])),
-      );
-    } else {
-      lista.sort(
-        (a, b) => _getId(b).compareTo(_getId(a)),
-      );
-    }
-
-    return lista;
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<HelpdeskProvider>();
+    final reparaciones = provider.reparaciones;
     final isLoading = provider.loading;
-    final lista = _filtrarYOrdenar(provider.reparaciones);
+
+    // Acumuladores para el Tablero
+    int porIniciar = 0;
+    int enProceso = 0;
+    int finalizadas = 0;
+
+    final filtrados = reparaciones.where((r) {
+      final estado = (r['estado'] ?? 'por_iniciar').toString().toLowerCase();
+      
+      // Contadores del Dashboard
+      if (estado == 'por_iniciar') porIniciar++;
+      if (estado == 'en_proceso') enProceso++;
+      if (estado == 'finalizada') finalizadas++;
+
+      final cliente = _getCliente(r).toLowerCase();
+      final equipo = _getEquipoStr(r).toLowerCase();
+      final query = busqueda.toLowerCase();
+
+      final coincideBusqueda = cliente.contains(query) || equipo.contains(query);
+      final coincideEstado = filtroEstado == 'todos' || estado == filtroEstado;
+
+      return coincideBusqueda && coincideEstado;
+    }).toList();
 
     return LayoutPrincipal(
-      titulo: 'Reparaciones',
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            // 🔍 Barra de búsqueda y filtros
-            Row(
+      titulo: 'Laboratorio Técnico',
+      child: Column(
+        children: [
+          // 📊 1. TABLERO KANBAN SUPERIOR
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    onChanged: (v) => setState(() => busqueda = v),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar cliente o equipo...',
-                      hintStyle: const TextStyle(color: Colors.white54),
-                      prefixIcon: const Icon(
-                        Icons.search,
-                        color: Colors.white70,
-                      ),
-                      filled: true,
-                      fillColor: AppColors.fondo.withOpacity(0.3),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
+                Expanded(child: _CardMetricaLab(titulo: 'En Cola', valor: porIniciar.toString(), color: Colors.redAccent, icono: Icons.inbox)),
                 const SizedBox(width: 8),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.sort, color: Colors.white70),
-                  color: AppColors.fondo,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  onSelected: (v) => setState(() => criterioOrden = v),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: 'reciente',
-                      child: Text('Ordenar por más recientes'),
-                    ),
-                    PopupMenuItem(
-                      value: 'nombre',
-                      child: Text('Ordenar por nombre'),
-                    ),
-                  ],
-                ),
+                Expanded(child: _CardMetricaLab(titulo: 'En Mesa', valor: enProceso.toString(), color: Colors.amberAccent, icono: Icons.engineering)),
+                const SizedBox(width: 8),
+                Expanded(child: _CardMetricaLab(titulo: 'Listos', valor: finalizadas.toString(), color: Colors.greenAccent, icono: Icons.verified)),
               ],
             ),
-            const SizedBox(height: 8),
+          ),
 
-            // 🟩 Chips de estado
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _chipFiltro('todos', 'Todos', Icons.list_alt),
-                  const SizedBox(width: 6),
-                  _chipFiltro('en_proceso', 'En proceso', Icons.timelapse),
-                  const SizedBox(width: 6),
-                  _chipFiltro('finalizada', 'Finalizadas', Icons.check_circle),
-                ],
+          // 🔍 2. BUSCADOR Y FILTROS
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: TextField(
+              onChanged: (v) => setState(() => busqueda = v),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Buscar por cliente o equipo...',
+                hintStyle: const TextStyle(color: Colors.white54, fontSize: 14),
+                prefixIcon: const Icon(Icons.search, color: Colors.tealAccent, size: 20),
+                filled: true,
+                fillColor: AppColors.fondo.withOpacity(0.4),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
             ),
-            const SizedBox(height: 12),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                _chipFiltro('todos', 'Todas', Icons.list),
+                _chipFiltro('por_iniciar', 'Por Iniciar', Icons.power_settings_new),
+                _chipFiltro('en_proceso', 'En Proceso', Icons.engineering),
+                _chipFiltro('finalizada', 'Finalizadas', Icons.check_circle),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
 
-            // 📋 Lista de reparaciones
-            Expanded(
-              child: isLoading && lista.isEmpty
-                  ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
-                  : lista.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No hay reparaciones registradas.',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _cargar,
-                          color: Colors.tealAccent,
-                          backgroundColor: AppColors.fondo,
-                          child: ListView.builder(
-                            itemCount: lista.length,
-                            itemBuilder: (context, index) {
-                              final r = lista[index];
-                              return _cardReparacion(r);
-                            },
-                          ),
+          // 📋 3. LISTADO DE ÓRDENES DE TRABAJO
+          Expanded(
+            child: isLoading && filtrados.isEmpty
+                ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+                : filtrados.isEmpty
+                    ? const Center(child: Text('No hay equipos en esta bandeja.', style: TextStyle(color: Colors.white54)))
+                    : RefreshIndicator(
+                        color: Colors.tealAccent,
+                        backgroundColor: AppColors.fondo,
+                        onRefresh: _cargar,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          itemCount: filtrados.length,
+                          itemBuilder: (context, index) {
+                            final r = filtrados[index];
+                            final id = _getId(r);
+                            final estado = (r['estado'] ?? 'por_iniciar').toString().toLowerCase();
+                            final cliente = _getCliente(r);
+                            final equipo = _getEquipoStr(r);
+                            final falla = _getFalla(r);
+
+                            final fechaRaw = r['created_at'] ?? '';
+                            final fecha = fechaRaw.isNotEmpty ? DateFormat('dd/MM HH:mm').format(DateTime.parse(fechaRaw.toString())) : '-';
+
+                            return Card(
+                              color: AppColors.fondo.withOpacity(0.85),
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              elevation: 4,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                side: BorderSide(color: _colorEstado(estado).withOpacity(0.3), width: 1),
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () {
+                                  // NAVEGACIÓN AL QUIRÓFANO (Lo haremos en el próximo paso)
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Entrando al Quirófano... 🛠️')));
+                                  /* Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => ReparacionDetalleScreen(reparacion: r)),
+                                  ).then((_) => _cargar()); */
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Fila 1: Estado y Fecha
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(color: _colorEstado(estado).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                                            child: Row(
+                                              children: [
+                                                Icon(_iconoEstado(estado), color: _colorEstado(estado), size: 14),
+                                                const SizedBox(width: 6),
+                                                Text(estado.replaceAll('_', ' ').toUpperCase(), style: TextStyle(color: _colorEstado(estado), fontSize: 10, fontWeight: FontWeight.bold)),
+                                              ],
+                                            ),
+                                          ),
+                                          Text('Ingreso: $fecha', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+
+                                      // Fila 2: Cliente y Equipo
+                                      Text(equipo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                      const SizedBox(height: 2),
+                                      Text(cliente, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                      const SizedBox(height: 12),
+
+                                      // Fila 3: Falla a reparar
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Icon(Icons.bug_report, color: Colors.white38, size: 16),
+                                            const SizedBox(width: 8),
+                                            Expanded(child: Text(falla, style: const TextStyle(color: Colors.white60, fontSize: 12, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // Fila 4: Botonera de Acción Directa
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: [
+                                          if (estado == 'por_iniciar')
+                                            ElevatedButton.icon(
+                                              onPressed: () => _cambiarEstado(id, 'en_proceso'),
+                                              icon: const Icon(Icons.play_arrow, size: 16, color: Colors.black),
+                                              label: const Text('Comenzar Reparación', style: TextStyle(fontWeight: FontWeight.bold)),
+                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black, minimumSize: const Size(0, 36)),
+                                            )
+                                          else if (estado == 'en_proceso') ...[
+                                            OutlinedButton.icon(
+                                              onPressed: () {
+                                                // Abrir detalle
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abriendo Quirófano...')));
+                                              },
+                                              icon: const Icon(Icons.build, size: 16, color: Colors.tealAccent),
+                                              label: const Text('Quirófano', style: TextStyle(color: Colors.tealAccent)),
+                                              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.tealAccent), minimumSize: const Size(0, 36)),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            ElevatedButton.icon(
+                                              onPressed: () => _cambiarEstado(id, 'finalizada'),
+                                              icon: const Icon(Icons.check, size: 16, color: Colors.black),
+                                              label: const Text('Finalizar', style: TextStyle(fontWeight: FontWeight.bold)),
+                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black, minimumSize: const Size(0, 36)),
+                                            ),
+                                          ] else if (estado == 'finalizada')
+                                            ElevatedButton.icon(
+                                              onPressed: () => _cambiarEstado(id, 'entregada'), // Gatillará lógica de entrega a futuro
+                                              icon: const Icon(Icons.rocket_launch, size: 16, color: Colors.white),
+                                              label: const Text('Mandar a Entregas', style: TextStyle(fontWeight: FontWeight.bold)),
+                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent, foregroundColor: Colors.white, minimumSize: const Size(0, 36)),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _chipFiltro(String valor, String label, IconData icono) {
-    final activo = filtroEstado == valor;
-    return ChoiceChip(
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icono, color: activo ? Colors.black : Colors.white70, size: 18),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: activo ? Colors.black : Colors.white70,
-              fontWeight: FontWeight.w500,
-            ),
+                      ),
           ),
         ],
       ),
-      selected: activo,
-      onSelected: (_) => setState(() => filtroEstado = valor),
-      selectedColor: Colors.tealAccent,
-      backgroundColor: AppColors.fondo.withOpacity(0.4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     );
   }
 
-  Widget _cardReparacion(Map<String, dynamic> r) {
-    final estado = r['estado'] ?? 'pendiente';
-    final fechaInicioRaw = r['fecha_inicio'];
-    final fechaFinRaw = r['fecha_fin'];
+  // --- Lógica del Flujo hacia Laravel ---
+  Future<void> _cambiarEstado(int id, String nuevoEstado) async {
+    try {
+      final provider = context.read<HelpdeskProvider>();
+      final exito = await provider.actualizarReparacion(id, {'estado': nuevoEstado});
+      
+      if (exito && mounted) {
+        await _cargar(); // Refresca la lista local
+        
+        String msj = '';
+        if (nuevoEstado == 'en_proceso') msj = '🛠️ Equipo en mesa de trabajo.';
+        if (nuevoEstado == 'finalizada') msj = '✅ ¡Excelente! Reparación terminada.';
+        if (nuevoEstado == 'entregada') msj = '🚀 Enviado a la bandeja de Entregas.';
 
-    final fechaInicio = fechaInicioRaw != null
-        ? formatoFecha.format(DateTime.parse(fechaInicioRaw.toString()))
-        : '-';
-    final fechaFin = fechaFinRaw != null
-        ? formatoFecha.format(DateTime.parse(fechaFinRaw.toString()))
-        : '-';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msj), behavior: SnackBarBehavior.floating));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
+    }
+  }
 
-    final cliente = _getNested(r, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre'], 'Cliente Desconocido');
-    final marca = _getNested(r, 'marca', ['diagnostico', 'ingreso', 'equipo', 'marca']);
-    final falla = _getNested(r, 'descripcion_falla', ['diagnostico', 'descripcion_falla']);
-    final idDiagnostico = _getDiagnosticoId(r);
-
-    final repuestosRelacionados = _repuestosGlobal.where((rep) => rep['id_diagnostico'] == idDiagnostico).toList();
-    final int countRepuestos = repuestosRelacionados.length;
-    final double costoRepuestos = repuestosRelacionados.fold(0.0, (sum, rep) => sum + (rep['costo'] as num? ?? 0).toDouble());
-
-    return ExpansionTile(
-      collapsedBackgroundColor: AppColors.fondo.withOpacity(0.9),
-      backgroundColor: AppColors.fondo.withOpacity(0.95),
-      collapsedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text(
-        '$cliente - $marca',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
+  Widget _chipFiltro(String estado, String label, IconData icono) {
+    final activo = filtroEstado == estado;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 14, color: activo ? Colors.black : Colors.white60),
+            const SizedBox(width: 6),
+            Text(label),
+          ],
         ),
+        labelStyle: TextStyle(color: activo ? Colors.black : Colors.white70, fontSize: 12, fontWeight: activo ? FontWeight.bold : FontWeight.normal),
+        selectedColor: Colors.tealAccent,
+        backgroundColor: AppColors.fondo.withOpacity(0.4),
+        selected: activo,
+        side: BorderSide(color: activo ? Colors.tealAccent : Colors.white12),
+        onSelected: (_) => setState(() => filtroEstado = estado),
       ),
-      subtitle: Text(
-        'Estado: ${estado.toUpperCase()}',
-        style: TextStyle(color: _colorEstado(estado)),
+    );
+  }
+}
+
+// Widget auxiliar para el Tablero Kanban
+class _CardMetricaLab extends StatelessWidget {
+  final String titulo;
+  final String valor;
+  final Color color;
+  final IconData icono;
+
+  const _CardMetricaLab({required this.titulo, required this.valor, required this.color, required this.icono});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.25)),
       ),
-      leading: Icon(_iconoEstado(estado), color: _colorEstado(estado)),
-      trailing: IconButton(
-        icon: const Icon(Icons.more_vert, color: Colors.white70),
-        onPressed: () => _mostrarOpciones(r),
-      ),
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Diagnóstico: $falla',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Descripción: ${r['descripcion'] ?? ''}',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Notas: ${r['notas'] ?? '-'}',
-                style: const TextStyle(color: Colors.white54),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Inicio: $fechaInicio',
-                style: const TextStyle(color: Colors.white54),
-              ),
-              Text(
-                'Fin: $fechaFin',
-                style: const TextStyle(color: Colors.white54),
-              ),
-              if (countRepuestos > 0) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.cyanAccent.withValues(alpha: 0.1),
-                    border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.5)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.build_circle, color: Colors.cyanAccent, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$countRepuestos Repuesto(s) usados - \$${costoRepuestos.toStringAsFixed(0)}',
-                        style: const TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              Icon(icono, color: color, size: 18),
+              Text(valor, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold)),
             ],
           ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _mostrarOpciones(Map<String, dynamic> r) async {
-    final estado = r['estado'] ?? 'pendiente';
-    final idReparacion = _getId(r);
-    final idDiagnostico = _getDiagnosticoId(r);
-    final idIngreso = _getIngresoId(r);
-    final provider = context.read<HelpdeskProvider>();
-
-    showModalBottomSheet(
-      backgroundColor: AppColors.fondo.withOpacity(0.97),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          const SizedBox(height: 8),
+          Text(titulo, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        ],
       ),
-      context: context,
-      builder: (_) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.description,
-                    color: Colors.tealAccent,
-                  ),
-                  title: const Text(
-                    'Ver detalle técnico',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  subtitle: const Text(
-                    'Abrir hoja con repuestos instalados',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(
-                      context,
-                      '/reparacion_detalle',
-                      arguments: r,
-                    );
-                  },
-                ),
-                const Divider(color: Colors.white12, indent: 16, endIndent: 16),
-
-                ListTile(
-                  leading: const Icon(
-                    Icons.inventory,
-                    color: Colors.blueAccent,
-                  ),
-                  title: const Text(
-                    'Ver repuestos usados',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  subtitle: const Text(
-                    'Ir al inventario filtrando por esta reparación',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => RepuestosScreen(idDiagnosticoFiltro: idDiagnostico),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(color: Colors.white12, indent: 16, endIndent: 16),
-
-                ListTile(
-                  leading: const Icon(
-                    Icons.timelapse,
-                    color: Colors.amberAccent,
-                  ),
-                  title: const Text(
-                    'Marcar en proceso',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await provider.actualizarReparacion(idReparacion, {'estado': 'en_proceso'});
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            '🟡 Reparación marcada como en proceso',
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.check_circle,
-                    color: Colors.greenAccent,
-                  ),
-                  title: const Text(
-                    'Marcar como finalizada',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await provider.actualizarReparacion(idReparacion, {'estado': 'finalizada'});
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            '✅ Reparación finalizada correctamente',
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
-                  },
-                ),
-                const Divider(color: Colors.white12, indent: 16, endIndent: 16),
-
-                if (estado == 'finalizada') ...[
-                  ListTile(
-                    leading: const Icon(
-                      Icons.rocket_launch,
-                      color: Colors.purpleAccent,
-                    ),
-                    title: const Text(
-                      'Liberar para Entrega (Alta manual)',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    subtitle: const Text(
-                      'Mueve el equipo a la lista de Entregas pendientes',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      
-                      final entregaDao = EntregaDao();
-                      final ingresoDao = IngresoDAO();
-                      
-                      final cliente = _getNested(r, 'cliente', ['diagnostico', 'ingreso', 'equipo', 'cliente', 'nombre']);
-                      final nuevaEntrega = Entrega(
-                        id_reparacion: idReparacion,
-                        nombre_receptor: cliente,
-                        estado: 'pendiente',
-                      );
-                      
-                      await entregaDao.insertar(nuevaEntrega);
-                      await provider.actualizarReparacion(idReparacion, {'estado': 'entregada'});
-                      await ingresoDao.actualizarEstadoDesdeReparacion(idIngreso, 'finalizado');
-                      
-                      await provider.recargarTodo();
-                      
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('🚀 Equipo liberado y enviado a Entregas'),
-                            backgroundColor: Colors.purple,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  const Divider(color: Colors.white12, indent: 16, endIndent: 16),
-                ],
-
-                ListTile(
-                  leading: const Icon(
-                    Icons.picture_as_pdf,
-                    color: Colors.cyanAccent,
-                  ),
-                  title: const Text(
-                    'Generar reporte PDF',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    try {
-                      final repuestoDao = RepuestoDao();
-                      final repuestos = await repuestoDao.listarDetallado();
-                      final repuestosRep = repuestos.where(
-                        (rep) => rep['id_diagnostico'] == idDiagnostico,
-                      ).toList();
-
-                      final file = await PdfReparacion.generar(
-                        reparacion: r,
-                        repuestos: repuestosRep,
-                      );
-                      await PdfUtils.abrir(file);
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error al generar PDF: $e'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                ),
-                const Divider(color: Colors.white12, indent: 16, endIndent: 16),
-
-                ListTile(
-                  leading: const Icon(
-                    Icons.delete_forever,
-                    color: Colors.redAccent,
-                  ),
-                  title: const Text(
-                    'Eliminar reparación',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await dao.eliminar(idReparacion); // Usando DAO local para borrado hasta migrar la ruta
-                    await provider.recargarReparaciones();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('🗑️ Reparación eliminada'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }

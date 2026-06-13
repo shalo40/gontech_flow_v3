@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart'; // <-- Inyección del Provider
-import '../../../core/dao/presupuesto_dao.dart';
-import '../../../core/providers/helpdesk_provider.dart'; // <-- El cerebro
+import 'package:provider/provider.dart';
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
+import 'presupuesto_detalle_screen.dart'; // <--- IMPORTACIÓN DE LA NUEVA PANTALLA DE DETALLE
 
 class PresupuestosScreen extends StatefulWidget {
   const PresupuestosScreen({super.key});
@@ -14,7 +14,6 @@ class PresupuestosScreen extends StatefulWidget {
 }
 
 class _PresupuestosScreenState extends State<PresupuestosScreen> {
-  final presupuestoDao = PresupuestoDao(); // Lo mantenemos temporalmente para las actualizaciones de estado locales
   String filtroEstado = 'todos';
 
   @override
@@ -29,66 +28,52 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
     await context.read<HelpdeskProvider>().recargarPresupuestos();
   }
 
-  // --- Helpers de compatibilidad API / Local ---
+  // --- Helpers de Extracción Segura para Árbol Laravel ---
   String _getCliente(Map<String, dynamic> p) {
-    if (p.containsKey('cliente') && p['cliente'] != null && p['cliente'] is String) return p['cliente'];
-    if (p['diagnostico'] != null && p['diagnostico']['ingreso'] != null && p['diagnostico']['ingreso']['equipo'] != null && p['diagnostico']['ingreso']['equipo']['cliente'] != null) {
-      return p['diagnostico']['ingreso']['equipo']['cliente']['nombre'] ?? 'Cliente desconocido';
+    if (p['diagnostico'] != null && 
+        p['diagnostico']['ingreso'] != null && 
+        p['diagnostico']['ingreso']['equipo'] != null && 
+        p['diagnostico']['ingreso']['equipo']['cliente'] != null) {
+      return p['diagnostico']['ingreso']['equipo']['cliente']['nombre'] ?? 'Cliente Desconocido';
     }
-    return 'Cliente desconocido';
+    return p['cliente']?.toString() ?? 'Cliente Desconocido';
   }
 
   String _getMarca(Map<String, dynamic> p) {
-    if (p.containsKey('marca') && p['marca'] != null) return p['marca'];
     if (p['diagnostico'] != null && p['diagnostico']['ingreso'] != null && p['diagnostico']['ingreso']['equipo'] != null) {
-      return p['diagnostico']['ingreso']['equipo']['marca'] ?? 'Sin marca';
+      return p['diagnostico']['ingreso']['equipo']['marca'] ?? 'Equipo';
     }
-    return 'Sin marca';
+    return p['marca']?.toString() ?? 'Equipo';
   }
 
   String _getTipo(Map<String, dynamic> p) {
-    if (p.containsKey('tipo_equipo') && p['tipo_equipo'] != null) return p['tipo_equipo'];
     if (p['diagnostico'] != null && p['diagnostico']['ingreso'] != null && p['diagnostico']['ingreso']['equipo'] != null) {
       return p['diagnostico']['ingreso']['equipo']['tipo_equipo'] ?? '';
     }
-    return '';
+    return p['tipo_equipo']?.toString() ?? '';
   }
 
-  int _getId(Map<String, dynamic> p) {
-    return int.tryParse((p['id_presupuesto'] ?? p['id'] ?? '0').toString()) ?? 0;
+  int _getId(Map<String, dynamic> p) => int.tryParse((p['id_presupuesto'] ?? p['id'] ?? '0').toString()) ?? 0;
+
+  // --- Formateador de Moneda Local (CLP) ---
+  String _formatearMoneda(dynamic valor) {
+    final monto = double.tryParse(valor.toString()) ?? 0.0;
+    return NumberFormat.currency(locale: 'es_CL', symbol: '\$', decimalDigits: 0).format(monto);
   }
-  // ---------------------------------------------
 
   Color _colorEstado(String estado) {
-    switch (estado) {
-      case 'autorizado':
-        return Colors.greenAccent;
-      case 'rechazado':
-        return Colors.redAccent;
-      default:
-        return Colors.amberAccent;
+    switch (estado.toLowerCase()) {
+      case 'autorizado': return Colors.greenAccent;
+      case 'rechazado': return Colors.redAccent;
+      default: return Colors.amberAccent;
     }
   }
 
   IconData _iconoEstado(String estado) {
-    switch (estado) {
-      case 'autorizado':
-        return Icons.check_circle_outline;
-      case 'rechazado':
-        return Icons.cancel_outlined;
-      default:
-        return Icons.hourglass_bottom;
-    }
-  }
-
-  String _textoEstado(String estado) {
-    switch (estado) {
-      case 'autorizado':
-        return 'Autorizado';
-      case 'rechazado':
-        return 'Rechazado';
-      default:
-        return 'Pendiente';
+    switch (estado.toLowerCase()) {
+      case 'autorizado': return Icons.check_circle_outline;
+      case 'rechazado': return Icons.cancel_outlined;
+      default: return Icons.hourglass_bottom;
     }
   }
 
@@ -98,19 +83,55 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
     final presupuestos = provider.presupuestos;
     final isLoading = provider.loading;
 
-    // Aplicar filtro en tiempo real
+    // Inicializamos acumuladores financieros para las métricas
+    double totalPorAprobar = 0;
+    double totalAprobado = 0;
+
     final filtrados = presupuestos.where((p) {
+      final estado = (p['estado'] ?? 'pendiente').toString().toLowerCase();
+      final totalItem = double.tryParse(p['total']?.toString() ?? '0') ?? 0.0;
+
+      // Sumatoria en tiempo real según el estado comercial
+      if (estado == 'pendiente') totalPorAprobar += totalItem;
+      if (estado == 'autorizado') totalAprobado += totalItem;
+
       if (filtroEstado == 'todos') return true;
-      return (p['estado'] ?? 'pendiente') == filtroEstado;
+      return estado == filtroEstado;
     }).toList();
 
     return LayoutPrincipal(
       titulo: 'Presupuestos',
       child: Column(
         children: [
-          // 🔍 Barra de filtros
+          // 📊 1. DASHBOARD FINANCIERO SUPERIOR (Pipeline en CLP)
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _CardMetricaFinanciera(
+                    titulo: 'Por Aprobar',
+                    valor: _formatearMoneda(totalPorAprobar),
+                    color: Colors.amberAccent,
+                    icono: Icons.lock_clock,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CardMetricaFinanciera(
+                    titulo: 'Aprobado',
+                    valor: _formatearMoneda(totalAprobado),
+                    color: Colors.greenAccent,
+                    icono: Icons.monetization_on,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 🎚️ 2. BOTONES DE FILTRO ESTILO CHIP
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -124,163 +145,144 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
             ),
           ),
 
-          // 📋 Listado de presupuestos
+          // 📋 3. LISTADO DE COTIZACIONES CON DISEÑO CRM
           Expanded(
             child: isLoading && filtrados.isEmpty
                 ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
                 : filtrados.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No hay presupuestos registrados',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      )
+                    ? const Center(child: Text('No hay cotizaciones en este estado.', style: TextStyle(color: Colors.white54)))
                     : RefreshIndicator(
                         color: Colors.tealAccent,
+                        backgroundColor: AppColors.fondo,
                         onRefresh: _cargar,
                         child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                           itemCount: filtrados.length,
                           itemBuilder: (context, index) {
                             final p = filtrados[index];
-                            final estado = p['estado'] ?? 'pendiente';
-                            final fechaRaw = p['fecha_creacion'] ?? p['created_at'];
-                            final fecha = fechaRaw != null
-                                ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(fechaRaw.toString()))
-                                : 'Sin fecha';
-
+                            final estado = (p['estado'] ?? 'pendiente').toString().toLowerCase();
+                            final idPresupuesto = _getId(p);
                             final cliente = _getCliente(p);
                             final marca = _getMarca(p);
                             final tipo = _getTipo(p);
-                            final idPresupuesto = _getId(p);
+
+                            final fechaRaw = p['fecha_creacion'] ?? p['created_at'];
+                            final fecha = fechaRaw != null
+                                ? DateFormat('dd/MM/yyyy').format(DateTime.parse(fechaRaw.toString()))
+                                : 'Reciente';
 
                             return Card(
-                              color: AppColors.fondo.withOpacity(0.95),
-                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              color: AppColors.fondo.withOpacity(0.85),
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              elevation: 4,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(20),
+                                side: BorderSide(color: Colors.white.withOpacity(0.04)),
                               ),
-                              child: ExpansionTile(
-                                leading: Icon(
-                                  _iconoEstado(estado),
-                                  color: _colorEstado(estado),
-                                  size: 34,
-                                ),
-                                title: Text(
-                                  cliente,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  '$marca ($tipo)\n${_textoEstado(estado)}',
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                iconColor: Colors.tealAccent,
-                                collapsedIconColor: Colors.white70,
-                                childrenPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                children: [
-                                  _detalleCampo('Trabajo solicitado', p['descripcion']),
-                                  _detalleCampo('Total estimado', '\$${p['total']?.toString() ?? '0'} CLP'),
-                                  _detalleCampo('Fecha de creación', fecha),
-                                  _detalleCampo('Equipo asociado', '$tipo - $marca'),
-                                  const SizedBox(height: 8),
-
-                                  // Estado visual
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Chip(
-                                      backgroundColor: _colorEstado(estado),
-                                      label: Text(
-                                        _textoEstado(estado),
-                                        style: const TextStyle(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                              child: InkWell( // <--- 🚀 INTEGRACIÓN: Envoltura táctil de navegación
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PresupuestoDetalleScreen(presupuesto: p),
                                     ),
-                                  ),
-
-                                  const SizedBox(height: 12),
-
-                                  // 🧩 Acciones
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  ).then((_) => _cargar()); // Recarga al volver por si cambió el estado
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      TextButton.icon(
-                                        onPressed: () => _mostrarDetalles(context, p, cliente, marca, tipo, estado),
-                                        icon: const Icon(
-                                          Icons.visibility_outlined,
-                                          color: Colors.tealAccent,
-                                        ),
-                                        label: const Text(
-                                          'Ver detalle',
-                                          style: TextStyle(
-                                            color: Colors.tealAccent,
-                                            fontWeight: FontWeight.bold,
+                                      // Encabezado: Cliente, Estado y Monto destacado
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(_iconoEstado(estado), color: _colorEstado(estado), size: 24),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(cliente, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                                                const SizedBox(height: 2),
+                                                Text('$tipo $marca • Cotización #$idPresupuesto', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                                              ],
+                                            ),
                                           ),
+                                          Text(
+                                            _formatearMoneda(p['total']),
+                                            style: TextStyle(color: _colorEstado(estado), fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+
+                                      // Bloque central: Descripción del trabajo
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(color: Colors.black38, borderRadius: BorderRadius.circular(12)),
+                                        child: Text(
+                                          p['descripcion'] ?? 'Sin descripción de la obra',
+                                          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      PopupMenuButton<String>(
-                                        color: AppColors.fondo,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        onSelected: (opcion) async {
-                                          if (opcion == 'autorizar' || opcion == 'rechazar') {
-                                            final nuevoEstado = opcion == 'autorizar' ? 'autorizado' : 'rechazado';
-                                            
-                                            // Actualización local temporal hasta integrar el endpoint de update
-                                            await presupuestoDao.actualizarEstado(idPresupuesto, nuevoEstado);
-                                            await _cargar();
+                                      const SizedBox(height: 12),
 
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    nuevoEstado == 'autorizado'
-                                                        ? '✅ Presupuesto autorizado'
-                                                        : '❌ Presupuesto rechazado',
+                                      // Fila de Cierre y Botones de Acción Directa
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text('Emitido el $fecha', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                          
+                                          // Barra de botones inteligentes (Solo si está pendiente)
+                                          if (estado == 'pendiente')
+                                            Row(
+                                              children: [
+                                                OutlinedButton.icon(
+                                                  onPressed: () => _procesarRespuestaPresupuesto(idPresupuesto, 'rechazado'),
+                                                  icon: const Icon(Icons.close, size: 14, color: Colors.redAccent),
+                                                  label: const Text('Rechazar', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                                                  style: OutlinedButton.styleFrom(
+                                                    side: const BorderSide(color: Colors.redAccent),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                                    minimumSize: const Size(0, 30),
                                                   ),
-                                                  behavior: SnackBarBehavior.floating,
                                                 ),
-                                              );
-                                            }
-                                          }
-                                        },
-                                        itemBuilder: (context) => [
-                                          const PopupMenuItem(
-                                            value: 'autorizar',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.check_circle, color: Colors.greenAccent),
-                                                SizedBox(width: 8),
-                                                Text('Autorizar'),
+                                                const SizedBox(width: 8),
+                                                ElevatedButton.icon(
+                                                  onPressed: () => _procesarRespuestaPresupuesto(idPresupuesto, 'autorizado'),
+                                                  icon: const Icon(Icons.check, size: 14, color: Colors.black),
+                                                  label: const Text('Aprobar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.greenAccent,
+                                                    foregroundColor: Colors.black,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                    minimumSize: const Size(0, 30),
+                                                  ),
+                                                ),
                                               ],
+                                            )
+                                          else
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: _colorEstado(estado).withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                estado.toUpperCase(),
+                                                style: TextStyle(color: _colorEstado(estado), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                              ),
                                             ),
-                                          ),
-                                          const PopupMenuItem(
-                                            value: 'rechazar',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.cancel, color: Colors.redAccent),
-                                                SizedBox(width: 8),
-                                                Text('Rechazar'),
-                                              ],
-                                            ),
-                                          ),
                                         ],
                                       ),
                                     ],
                                   ),
-                                ],
+                                ),
                               ),
                             );
                           },
@@ -292,7 +294,35 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
     );
   }
 
-  // ---------- COMPONENTES ----------
+  // --- Lógica del Flujo de Actualización Comercial a Laravel ---
+  Future<void> _procesarRespuestaPresupuesto(int id, String decision) async {
+    try {
+      final provider = context.read<HelpdeskProvider>();
+  
+      final exito = await provider.actualizarPresupuesto(id, {'estado': decision});      
+      if (exito) {
+        await _cargar();
+        if (mounted) {
+          await provider.recargarIngresos();
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(decision == 'autorizado' 
+                ? '🚀 Cotización aprobada. ¡La orden pasó a reparación!' 
+                : '❌ Cotización marcada como rechazada.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al procesar la cotización: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
 
   Widget _chipFiltro(String estado, String label, IconData icono) {
     final activo = filtroEstado == estado;
@@ -302,101 +332,65 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icono, size: 16),
-            const SizedBox(width: 4),
+            Icon(icono, size: 14, color: activo ? Colors.black : Colors.white60),
+            const SizedBox(width: 6),
             Text(label),
           ],
         ),
-        labelStyle: TextStyle(
-          color: activo ? Colors.black : Colors.white70,
-          fontSize: 13,
-        ),
+        labelStyle: TextStyle(color: activo ? Colors.black : Colors.white70, fontSize: 13, fontWeight: activo ? FontWeight.bold : Alignment.center == null ? FontWeight.bold : FontWeight.normal),
         selectedColor: Colors.tealAccent,
-        backgroundColor: AppColors.fondo.withOpacity(0.3),
+        backgroundColor: AppColors.fondo.withOpacity(0.4),
         selected: activo,
+        side: BorderSide(color: activo ? Colors.tealAccent : Colors.white12),
         onSelected: (_) => setState(() => filtroEstado = estado),
       ),
     );
   }
+}
 
-  Widget _detalleCampo(String titulo, String? valor) {
-    if (valor == null || valor.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 3,
-            child: Text(
-              '$titulo:',
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-          ),
-          Expanded(
-            flex: 5,
-            child: Text(
-              valor,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                height: 1.3,
-              ),
-            ),
-          ),
-        ],
+class _CardMetricaFinanciera extends StatelessWidget {
+  final String titulo;
+  final String valor;
+  final Color color;
+  final IconData icono;
+
+  const _CardMetricaFinanciera({
+    required this.titulo,
+    required this.valor,
+    required this.color,
+    required this.icono,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.25)),
       ),
-    );
-  }
-
-  Future<void> _mostrarDetalles(
-    BuildContext context,
-    Map<String, dynamic> p,
-    String cliente,
-    String marca,
-    String tipo,
-    String estado,
-  ) async {
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.fondo.withOpacity(0.96),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Row(
-          children: const [
-            Icon(Icons.receipt_long, color: Colors.tealAccent),
-            SizedBox(width: 8),
-            Text(
-              'Detalle del presupuesto',
-              style: TextStyle(color: Colors.white),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _detalleCampo('Cliente', cliente),
-            _detalleCampo('Equipo', '$tipo $marca'),
-            _detalleCampo('Descripción', p['descripcion'] ?? ''),
-            _detalleCampo('Total estimado', '\$${p['total']?.toString() ?? '0'} CLP'),
-            const SizedBox(height: 10),
-            Chip(
-              backgroundColor: _colorEstado(estado),
-              label: Text(
-                _textoEstado(estado),
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+            child: Icon(icono, color: color, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  valor, 
+                  style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
+                Text(titulo, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close, color: Colors.redAccent),
-            label: const Text('Cerrar'),
           ),
         ],
       ),

@@ -25,7 +25,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
   ];
   List<String> accesoriosSeleccionados = [];
 
-  int _getId(Map<String, dynamic> e) {
+  int getId(Map<String, dynamic> e) {
     return int.tryParse((e['id_equipo'] ?? e['id'] ?? '0').toString()) ?? 0;
   }
 
@@ -143,7 +143,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                         ),
                         items: equiposCliente.map((e) {
-                          final id = _getId(e);
+                          final id = getId(e);
                           return DropdownMenuItem<int>(
                             value: id,
                             child: Text(
@@ -172,7 +172,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                             if (actualizados.isNotEmpty) {
                               setModalState(() {
                                 // Selecciona el primero de la lista (el más reciente devuelto por Laravel)
-                                idEquipoSeleccionado = _getId(actualizados.first);
+                                idEquipoSeleccionado = getId(actualizados.first);
                               });
                             }
                           }
@@ -283,7 +283,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                     final exito = await provider.agregarIngreso(ingresoData);
 
                     if (exito && context.mounted) {
-                      final idNuevoIngreso = _getId(provider.ingresos.first);
+                      final idNuevoIngreso = getId(provider.ingresos.first);
 
                       if (fotoEvidencia != null) {
                         await provider.asociarDocumentoAEntidad(

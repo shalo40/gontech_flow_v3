@@ -386,6 +386,34 @@ class HelpdeskProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+  // --- ACTUALIZAR PRESUPUESTO ---
+  Future<bool> actualizarPresupuesto(int id, Map<String, dynamic> data) async {
+    _loading = true;
+    notifyListeners();
+    
+    try {
+      if (await ApiConfig.useApiMode()) {
+        // Modo Laravel API
+        final res = await _remotePresupuesto.actualizarPresupuesto(id, data);
+        if (res != null) {
+          await recargarPresupuestos();
+          return true;
+        }
+        return false;
+      } else {
+        // Modo SQLite Local (Fallback)
+        // El DAO de presupuestos expone actualizarEstado similar a otras entidades
+        await _presupuestoDao.actualizarEstado(id, data['estado'] ?? 'pendiente');
+        await recargarPresupuestos();
+        return true;
+      }
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> recargarPresupuestos() async {
     if (await ApiConfig.useApiMode()) {
@@ -401,6 +429,7 @@ class HelpdeskProvider extends ChangeNotifier {
     resumen['Presupuestos'] = _presupuestos.length;
     notifyListeners();
   }
+  
 
   // --- CRUD REPARACIONES ---
   Future<bool> agregarReparacion(Map<String, dynamic> data) async {
