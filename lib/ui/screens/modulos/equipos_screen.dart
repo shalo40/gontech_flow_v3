@@ -2,14 +2,15 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart'; // <-- Inyectamos Provider
+import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '../../../core/providers/helpdesk_provider.dart'; // <-- Importamos tu Provider
+import '../../../core/providers/helpdesk_provider.dart';
 import '../../layout/layout_principal.dart';
 import '../../theme/app_colors.dart';
+import 'equipo_detalle_screen.dart'; // Asegúrate de importar el detalle
 
 class EquiposScreen extends StatefulWidget {
   const EquiposScreen({super.key});
@@ -25,7 +26,6 @@ class _EquiposScreenState extends State<EquiposScreen> {
   @override
   void initState() {
     super.initState();
-    // Llamada segura al provider después de construir la vista
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _cargar();
     });
@@ -58,56 +58,41 @@ class _EquiposScreenState extends State<EquiposScreen> {
   // ---------------------------------------------
 
   Color _colorEstado(String? estado) {
-    switch (estado) {
-      case 'pendiente':
-        return Colors.amber;
-      case 'diagnosticado':
-        return Colors.tealAccent;
-      case 'en_reparacion':
-        return Colors.blueAccent;
-      case 'entregado':
-        return Colors.greenAccent;
-      default:
-        return Colors.white70;
+    switch (estado?.toLowerCase()) {
+      case 'pendiente': return Colors.orangeAccent;
+      case 'diagnosticado': return Colors.tealAccent;
+      case 'en_reparacion': return Colors.blueAccent;
+      case 'entregado': return Colors.greenAccent;
+      default: return Colors.white54;
     }
   }
 
   IconData _iconoEstado(String? estado) {
-    switch (estado) {
-      case 'diagnosticado':
-        return Icons.analytics_outlined;
-      case 'en_reparacion':
-        return Icons.build_circle_outlined;
-      case 'entregado':
-        return Icons.check_circle_outline;
-      default:
-        return Icons.hourglass_empty;
-    }
-  }
-
-  String _descripcionEstado(String estado) {
-    switch (estado) {
-      case 'pendiente':
-        return 'Pendiente de diagnóstico';
-      case 'diagnosticado':
-        return 'Pendiente de aprobación de presupuesto';
-      case 'en_reparacion':
-        return 'En proceso de reparación';
-      case 'entregado':
-        return 'Equipo entregado al cliente';
-      default:
-        return 'Estado desconocido';
+    switch (estado?.toLowerCase()) {
+      case 'diagnosticado': return Icons.analytics_outlined;
+      case 'en_reparacion': return Icons.build_circle_outlined;
+      case 'entregado': return Icons.check_circle_outline;
+      default: return Icons.hourglass_empty;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Escuchamos el estado desde el Provider
     final provider = context.watch<HelpdeskProvider>();
     final equipos = provider.equipos;
     final isLoading = provider.loading;
 
+    // Contadores para el mini-dashboard
+    int cantPendientes = 0;
+    int cantEnReparacion = 0;
+
     final equiposFiltrados = equipos.where((e) {
+      final estadoActual = (e['estado'] ?? 'pendiente').toString().toLowerCase();
+      
+      // Conteo dinámico para el resumen
+      if (estadoActual == 'pendiente') cantPendientes++;
+      if (estadoActual == 'en_reparacion') cantEnReparacion++;
+
       final texto = filtroTexto.toLowerCase();
       final nombreCliente = _getNombreCliente(e).toLowerCase();
       
@@ -116,7 +101,6 @@ class _EquiposScreenState extends State<EquiposScreen> {
           (e['marca']?.toString().toLowerCase().contains(texto) ?? false) ||
           (e['tipo_equipo']?.toString().toLowerCase().contains(texto) ?? false);
           
-      final estadoActual = e['estado'] ?? 'pendiente';
       final coincideEstado = filtroEstado == 'todos' || estadoActual == filtroEstado;
       
       return coincideTexto && coincideEstado;
@@ -129,29 +113,66 @@ class _EquiposScreenState extends State<EquiposScreen> {
     }
 
     return LayoutPrincipal(
-      titulo: 'Equipos',
+      titulo: 'Parque de Equipos',
       child: Column(
         children: [
+          // 📊 1. TABLERO DE MÉTRICAS SUPERIOR (Copia exacta del dashboard)
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _CardMetricaEquipos(
+                    titulo: 'Total Activos', 
+                    valor: equipos.length.toString(), 
+                    color: Colors.white, 
+                    icono: Icons.computer
+                  )
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CardMetricaEquipos(
+                    titulo: 'Por Diagnosticar', 
+                    valor: cantPendientes.toString(), 
+                    color: Colors.orangeAccent, 
+                    icono: Icons.hourglass_top
+                  )
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CardMetricaEquipos(
+                    titulo: 'En Mesa', 
+                    valor: cantEnReparacion.toString(), 
+                    color: Colors.blueAccent, 
+                    icono: Icons.engineering
+                  )
+                ),
+              ],
+            ),
+          ),
+
+          // 🔍 2. BUSCADOR MODERNIZADO
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
+              onChanged: (valor) => setState(() => filtroTexto = valor),
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: 'Buscar por cliente, tipo o marca...',
-                prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                hintStyle: const TextStyle(color: Colors.white54, fontSize: 14),
+                prefixIcon: const Icon(Icons.search, color: Colors.tealAccent, size: 20),
                 filled: true,
-                fillColor: AppColors.fondo.withOpacity(0.3),
+                fillColor: AppColors.fondo.withOpacity(0.4),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide.none,
                 ),
-                hintStyle: const TextStyle(color: Colors.white70),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
-              style: const TextStyle(color: Colors.white),
-              onChanged: (valor) => setState(() => filtroTexto = valor),
             ),
           ),
 
-          // 🏷️ Filtros por estado
+          // 🏷️ 3. FILTROS POR ESTADO (ChoiceChips rediseñados)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -165,41 +186,48 @@ class _EquiposScreenState extends State<EquiposScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
-          // 📋 Lista agrupada
+          // 📋 4. LISTA AGRUPADA (Rediseño total de la tarjeta)
           Expanded(
             child: RefreshIndicator(
               onRefresh: _cargar,
               color: Colors.tealAccent,
+              backgroundColor: AppColors.fondo,
               child: isLoading && equiposFiltrados.isEmpty
                   ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
                   : equiposFiltrados.isEmpty
                       ? const Center(
-                          child: Text(
-                            'No hay equipos registrados.',
-                            style: TextStyle(color: Colors.white70),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.devices_other, color: Colors.white10, size: 60),
+                              SizedBox(height: 16),
+                              Text('No hay equipos registrados.', style: TextStyle(color: Colors.white70)),
+                            ],
                           ),
                         )
                       : ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           children: agrupados.entries.map((grupo) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // Separador de Fecha Estilizado
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
-                                  ),
-                                  child: Text(
-                                    '📅 ${grupo.key}',
-                                    style: const TextStyle(
-                                      color: Colors.tealAccent,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  padding: const EdgeInsets.only(top: 16, bottom: 8, left: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.calendar_today, color: Colors.tealAccent, size: 14),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        grupo.key.toUpperCase(),
+                                        style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                ...grupo.value.map((e) => _cardEquipo(context, e)),
+                                ...grupo.value.map((e) => _cardEquipoRedesigned(context, e)),
                               ],
                             );
                           }).toList(),
@@ -219,378 +247,168 @@ class _EquiposScreenState extends State<EquiposScreen> {
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icono, size: 16),
-            const SizedBox(width: 4),
+            Icon(icono, size: 14, color: activo ? Colors.black : Colors.white60),
+            const SizedBox(width: 6),
             Text(label),
           ],
         ),
         labelStyle: TextStyle(
           color: activo ? Colors.black : Colors.white70,
           fontSize: 12,
+          fontWeight: activo ? FontWeight.bold : FontWeight.normal,
         ),
         selectedColor: Colors.tealAccent,
-        backgroundColor: AppColors.fondo.withOpacity(0.3),
+        backgroundColor: AppColors.fondo.withOpacity(0.4),
         selected: activo,
+        side: BorderSide(color: activo ? Colors.tealAccent : Colors.white12),
         onSelected: (_) => setState(() => filtroEstado = estado),
       ),
     );
   }
 
-  Widget _cardEquipo(BuildContext context, Map<String, dynamic> e) {
-    final estado = e['estado'] ?? 'pendiente';
+  // ===========================================
+  // 🆕 TARJETA DE EQUIPO REDISEÑADA (UI Premium)
+  // ===========================================
+  Widget _cardEquipoRedesigned(BuildContext context, Map<String, dynamic> e) {
+    final estado = (e['estado'] ?? 'pendiente').toString().toLowerCase();
     final nombreCliente = _getNombreCliente(e);
+    final colorEst = _colorEstado(estado);
 
-    return Card(
-      color: AppColors.fondo.withOpacity(0.9),
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ListTile(
-        onTap: () => _mostrarDetalles(context, e, nombreCliente),
-        leading: CircleAvatar(
-          backgroundColor: Colors.tealAccent.withOpacity(0.15),
-          backgroundImage:
-              (e['foto_path'] != null &&
-                  (e['foto_path'] as String).isNotEmpty &&
-                  File(e['foto_path']).existsSync())
-              ? FileImage(File(e['foto_path']))
-              : null,
-          child: (e['foto_path'] == null || (e['foto_path'] as String).isEmpty)
-              ? Icon(_iconoEstado(estado), color: Colors.tealAccent)
-              : null,
-        ),
-        title: Text(
-          '${e['tipo_equipo'] ?? 'Equipo'} ${e['marca'] ?? ''}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Text(
-          'Cliente: $nombreCliente\n'
-          'Serie: ${e['numero_serie'] ?? '-'}',
-          style: const TextStyle(color: Colors.white70, height: 1.3),
-        ),
-        trailing: Chip(
-          label: Text(
-            estado.toUpperCase(),
-            style: const TextStyle(color: Colors.black, fontSize: 11),
-          ),
-          backgroundColor: _colorEstado(estado),
-        ),
-      ),
-    );
-  }
-
-  // ===========================
-  // 💬 DETALLES DEL EQUIPO
-  // ===========================
-  Future<void> _mostrarDetalles(
-    BuildContext context,
-    Map<String, dynamic> equipo,
-    String nombreCliente,
-  ) async {
-    final estado = equipo['estado'] ?? 'pendiente';
-    final idReal = _getIdEquipo(equipo);
-
-    await showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: AppColors.fondo.withOpacity(0.97),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 640),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(
-                    radius: 45,
-                    backgroundColor: Colors.tealAccent.withOpacity(0.15),
-                    backgroundImage:
-                        (equipo['foto_path'] != null &&
-                            (equipo['foto_path'] as String).isNotEmpty &&
-                            File(equipo['foto_path']).existsSync())
-                        ? FileImage(File(equipo['foto_path']))
-                        : null,
-                    child:
-                        (equipo['foto_path'] == null ||
-                            (equipo['foto_path'] as String).isEmpty)
-                        ? const Icon(
-                            Icons.computer,
-                            color: Colors.tealAccent,
-                            size: 40,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    nombreCliente,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${equipo['tipo_equipo']} ${equipo['marca']} - ${equipo['modelo']}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  Chip(
-                    label: Text(
-                      estado.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    backgroundColor: _colorEstado(estado),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _descripcionEstado(estado),
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // QR
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: QrImageView(
-                      data: 'EQUIPO-$idReal-${equipo['numero_serie'] ?? ''}',
-                      size: 160,
-                      backgroundColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Código QR único del equipo',
-                    style: TextStyle(color: Colors.white60, fontSize: 12),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Detalles técnicos
-                  _detalleItem('ID Equipo', idReal),
-                  _detalleItem('Número de serie', equipo['numero_serie']),
-                  _detalleItem('Tipo', equipo['tipo_equipo']),
-                  _detalleItem('Marca', equipo['marca']),
-                  _detalleItem('Modelo', equipo['modelo']),
-                  _detalleItem('Descripción', equipo['descripcion']),
-                  const SizedBox(height: 16),
-
-                  // Botones
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          await _imprimirQR(
-                            context,
-                            equipo,
-                            idReal,
-                            nombreCliente,
-                          );
-                        },
-                        icon: const Icon(Icons.print, color: Colors.black),
-                        label: const Text('Imprimir QR'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.tealAccent,
-                          foregroundColor: Colors.black,
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.pushNamed(
-                            context,
-                            '/ingresos',
-                            // Usamos parseInt de forma segura si la ID viene como String desde Laravel
-                            arguments: int.tryParse(idReal) ?? 0,
-                          );
-                        },
-                        icon: const Icon(Icons.receipt_long),
-                        label: const Text('Ver ingreso'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close, color: Colors.black),
-                        label: const Text('Cerrar'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white24,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _detalleItem(String titulo, String? valor) {
-    if (valor == null || valor.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Text(
-            '$titulo: ',
-            style: const TextStyle(color: Colors.white60, fontSize: 12),
-          ),
-          Expanded(
-            child: Text(
-              valor,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-            ),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.fondo.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(20),
+        // Borde neón basado en el estado
+        border: Border.all(color: colorEst.withOpacity(0.4), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: colorEst.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          // ¡AQUÍ ESTÁ LA INTEGRACIÓN CLAVE! Navegamos al detalle en pantalla completa
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EquipoDetalleScreen(equipo: e),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Imagen / Icono
+                Container(
+                  width: 60, height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Center(
+                    child: (e['foto_path'] != null &&
+                            (e['foto_path'] as String).isNotEmpty &&
+                            File(e['foto_path']).existsSync())
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(13),
+                            child: Image.file(File(e['foto_path']), fit: BoxFit.cover, width: 60, height: 60),
+                          )
+                        : Icon(_iconoEstado(estado), color: colorEst, size: 28),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                
+                // Info Central
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${e['tipo_equipo'] ?? 'Equipo'} ${e['marca'] ?? ''}'.trim(),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        nombreCliente,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'S/N: ${e['numero_serie'] ?? '-'}',
+                        style: const TextStyle(color: Colors.white38, fontSize: 11, fontFamily: 'monospace'),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Badge de Estado y Flecha
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorEst.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        estado.toUpperCase(),
+                        style: TextStyle(color: colorEst, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
+}
 
-  // ===========================
-  // 🖨️ FUNCIÓN DE IMPRESIÓN QR
-  // ===========================
-  Future<void> _imprimirQR(
-    BuildContext context,
-    Map<String, dynamic> equipo,
-    String idEquipo,
-    String cliente,
-  ) async {
-    try {
-      final pdf = pw.Document();
+// --- Componente auxiliar para las métricas superior ---
+class _CardMetricaEquipos extends StatelessWidget {
+  final String titulo;
+  final String valor;
+  final Color color;
+  final IconData icono;
 
-      // Logo
-      final logo = await rootBundle.load('lib/ui/assets/images/logo.png');
-      final logoBytes = logo.buffer.asUint8List();
+  const _CardMetricaEquipos({required this.titulo, required this.valor, required this.color, required this.icono});
 
-      final numeroSerie = equipo['numero_serie'] ?? '';
-
-      // Generar el QR
-      final qrImage = await QrPainter(
-        data: 'EQUIPO-$idEquipo-$numeroSerie',
-        version: QrVersions.auto,
-        color: const Color(0xFF000000),
-        emptyColor: const Color(0xFFFFFFFF),
-      ).toImageData(400, format: ImageByteFormat.png);
-
-      final imageBytes = qrImage!.buffer.asUint8List();
-
-      // ¡Texto de la etiqueta dinámico!
-      final tituloEquipo = '${equipo['tipo_equipo'] ?? ''} ${equipo['marca'] ?? ''} ${equipo['modelo'] ?? ''}'.trim();
-
-      // Etiqueta profesional (80x50 mm)
-      pdf.addPage(
-        pw.Page(
-          pageFormat: const PdfPageFormat(
-            80 * PdfPageFormat.mm,
-            50 * PdfPageFormat.mm,
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icono, color: color, size: 18),
+              Text(valor, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold)),
+            ],
           ),
-          margin: const pw.EdgeInsets.all(6),
-          build: (pw.Context context) {
-            return pw.Container(
-              color: PdfColors.white,
-              child: pw.Column(
-                mainAxisAlignment: pw.MainAxisAlignment.center,
-                crossAxisAlignment: pw.CrossAxisAlignment.center,
-                children: [
-                  // Logo + Marca
-                  pw.Image(pw.MemoryImage(logoBytes), height: 28),
-                  pw.SizedBox(height: 2),
-                  pw.Text(
-                    'GONTECH SOLUTIONS',
-                    style: pw.TextStyle(
-                      fontSize: 10,
-                      fontWeight: pw.FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  pw.Text(
-                    cliente,
-                    style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-                  ),
-                  pw.SizedBox(height: 4),
-
-                  pw.Divider(color: PdfColors.grey400, thickness: 0.3),
-
-                  // Info del equipo dinámica
-                  pw.SizedBox(height: 3),
-                  pw.Text(
-                    tituloEquipo.isEmpty ? 'Equipo sin especificar' : tituloEquipo,
-                    style: pw.TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.Text(
-                    'Serie: ${numeroSerie.isEmpty ? '-' : numeroSerie}   ID: #$idEquipo',
-                    style: pw.TextStyle(fontSize: 7.5),
-                  ),
-                  pw.SizedBox(height: 4),
-
-                  pw.Divider(color: PdfColors.grey400, thickness: 0.3),
-
-                  // Código QR centrado
-                  pw.SizedBox(height: 4),
-                  pw.Image(pw.MemoryImage(imageBytes), width: 90, height: 90),
-                  pw.SizedBox(height: 4),
-
-                  // Footer
-                  pw.Divider(color: PdfColors.grey400, thickness: 0.3),
-                  pw.Text(
-                    'gontechsolutions.cl',
-                    style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      );
-
-      // Guardar en Descargas
-      final Directory downloadsDir = Directory('/storage/emulated/0/Download');
-      final file = File('${downloadsDir.path}/Etiqueta_Equipo_$idEquipo.pdf');
-      await file.writeAsBytes(await pdf.save());
-
-      if(context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ PDF guardado en Descargas: ${file.path}'),
-            backgroundColor: Colors.tealAccent,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if(context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al generar el QR: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
+          const SizedBox(height: 8),
+          Text(titulo, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        ],
+      ),
+    );
   }
 }

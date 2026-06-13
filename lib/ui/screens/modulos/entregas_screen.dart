@@ -247,8 +247,13 @@ class _EntregasScreenState extends State<EntregasScreen> {
                                           children: [
                                             ElevatedButton.icon(
                                               onPressed: () {
-                                                // TODO: Lógica para abrir el modal de firma
-                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abrir pad de firma... ✍️')));
+                                                // 🚀 ABRIR EL PAD DE FIRMA
+                                                mostrarFirmaModal(
+                                                  context,
+                                                  _getId(e), // ID de la entrega
+                                                  e,         // Todos los datos de la entrega
+                                                  _cargarDatos // Para que recargue al éxito
+                                                );
                                               },
                                               icon: const Icon(Icons.draw, size: 16, color: Colors.black),
                                               label: const Text('Entregar y Firmar', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -345,7 +350,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Sección de Firma
+              // Sección de Firma
                 const Text('Firma del Titular', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 if (tieneFirma)
@@ -354,7 +359,14 @@ class _EntregasScreenState extends State<EntregasScreen> {
                     height: 120,
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                    child: Image.file(File(e['firma_path']), fit: BoxFit.contain),
+                    child: Image.network(
+                      // 🌐 ASUMIENDO QUE TU API LOCAL ESTÁ EN ESTA RUTA (Cámbiala si es diferente)
+                      'http://10.0.2.2:8000/storage/${e['firma_path']}', 
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Center(
+                        child: Text('❌ Error al cargar la firma del servidor', style: TextStyle(color: Colors.red)),
+                      ),
+                    ),
                   )
                 else
                   Container(
@@ -363,7 +375,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
                     decoration: BoxDecoration(
                       color: Colors.black38,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white12, style: BorderStyle.solid),
+                      border: Border.all(color: Colors.white12),
                     ),
                     child: const Center(
                       child: Text('Pendiente de firma en mostrador', style: TextStyle(color: Colors.white38, fontStyle: FontStyle.italic)),

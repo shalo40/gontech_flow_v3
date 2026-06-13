@@ -12,8 +12,6 @@ class EquipoDetalleScreen extends StatelessWidget {
 
   const EquipoDetalleScreen({super.key, required this.equipo});
 
-  static const _colorModulo = Colors.deepPurpleAccent;
-
   // --- Helpers de compatibilidad API / Local ---
   String _getNombreCliente() {
     if (equipo.containsKey('nombre_cliente') && equipo['nombre_cliente'] != null) {
@@ -31,54 +29,39 @@ class EquipoDetalleScreen extends StatelessWidget {
   // ---------------------------------------------
 
   Color _colorEstado(String? estado) {
-    switch (estado) {
-      case 'pendiente':
-        return Colors.amber;
-      case 'diagnosticado':
-        return Colors.tealAccent;
-      case 'en_reparacion':
-        return Colors.blueAccent;
-      case 'entregado':
-        return Colors.greenAccent;
-      default:
-        return Colors.white70;
+    switch (estado?.toLowerCase()) {
+      case 'pendiente': return Colors.orangeAccent;
+      case 'diagnosticado': return Colors.tealAccent;
+      case 'en_reparacion': return Colors.blueAccent;
+      case 'entregado': return Colors.greenAccent;
+      default: return Colors.white54;
     }
   }
 
   IconData _iconoEstado(String? estado) {
-    switch (estado) {
-      case 'diagnosticado':
-        return Icons.analytics_outlined;
-      case 'en_reparacion':
-        return Icons.build_circle_outlined;
-      case 'entregado':
-        return Icons.check_circle_outline;
-      default:
-        return Icons.hourglass_empty;
+    switch (estado?.toLowerCase()) {
+      case 'diagnosticado': return Icons.analytics_outlined;
+      case 'en_reparacion': return Icons.build_circle_outlined;
+      case 'entregado': return Icons.check_circle_outline;
+      default: return Icons.hourglass_empty;
     }
   }
 
   String _textoEstado(String estado) {
-    switch (estado) {
-      case 'pendiente':
-        return 'Pendiente de diagnostico';
-      case 'diagnosticado':
-        return 'Diagnosticado';
-      case 'en_reparacion':
-        return 'En proceso de reparacion';
-      case 'entregado':
-        return 'Entregado al cliente';
-      default:
-        return 'Desconocido';
+    switch (estado.toLowerCase()) {
+      case 'pendiente': return 'Pendiente de diagnóstico';
+      case 'diagnosticado': return 'Diagnosticado / Pto. Enviado';
+      case 'en_reparacion': return 'En mesa de trabajo';
+      case 'entregado': return 'Entregado al cliente';
+      default: return 'Estado Desconocido';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final estado = equipo['estado'] ?? 'pendiente';
+    final estado = (equipo['estado'] ?? 'pendiente').toString().toLowerCase();
     final colorEst = _colorEstado(estado);
-    final tieneFoto = equipo['foto_path'] != null &&
-        (equipo['foto_path'] as String).isNotEmpty;
+    final tieneFoto = equipo['foto_path'] != null && (equipo['foto_path'] as String).isNotEmpty;
         
     final idReal = _getIdEquipo();
     final qrData = 'EQUIPO-$idReal-${equipo['numero_serie'] ?? ''}';
@@ -88,19 +71,18 @@ class EquipoDetalleScreen extends StatelessWidget {
       backgroundColor: AppColors.fondo,
       body: CustomScrollView(
         slivers: [
+          // 🖼️ HEADER DINÁMICO
           SliverAppBar(
-            expandedHeight: 200,
+            expandedHeight: 240,
             pinned: true,
             backgroundColor: AppColors.fondo,
             foregroundColor: Colors.white,
+            elevation: 0,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      _colorModulo.withValues(alpha: 0.3),
-                      AppColors.fondo,
-                    ],
+                    colors: [colorEst.withOpacity(0.25), AppColors.fondo],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
@@ -109,41 +91,31 @@ class EquipoDetalleScreen extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 30),
                       Container(
-                        width: 72,
-                        height: 72,
+                        width: 80, height: 80,
                         decoration: BoxDecoration(
-                          color: _colorModulo.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(18),
-                          image: tieneFoto
-                              ? DecorationImage(
-                                  image: FileImage(
-                                      File(equipo['foto_path'])),
-                                  fit: BoxFit.cover,
-                                )
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: colorEst.withOpacity(0.5), width: 2),
+                          boxShadow: [BoxShadow(color: colorEst.withOpacity(0.2), blurRadius: 12, spreadRadius: 2)],
+                          image: tieneFoto && File(equipo['foto_path']).existsSync()
+                              ? DecorationImage(image: FileImage(File(equipo['foto_path'])), fit: BoxFit.cover)
                               : null,
                         ),
-                        child: !tieneFoto
-                            ? Icon(_iconoEstado(estado),
-                                color: _colorModulo, size: 36)
+                        child: !tieneFoto || !File(equipo['foto_path']).existsSync()
+                            ? Icon(_iconoEstado(estado), color: colorEst, size: 40)
                             : null,
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 16),
                       Text(
-                        '${equipo['tipo_equipo'] ?? 'Equipo'} ${equipo['marca'] ?? ''}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        '${equipo['tipo_equipo'] ?? 'Equipo'} ${equipo['marca'] ?? ''}'.trim(),
+                        style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                       ),
+                      const SizedBox(height: 4),
                       Text(
-                        equipo['modelo'] ?? '',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 14,
-                        ),
+                        equipo['modelo'] ?? 'Modelo no especificado',
+                        style: const TextStyle(color: Colors.white70, fontSize: 15),
                       ),
                     ],
                   ),
@@ -152,219 +124,231 @@ class EquipoDetalleScreen extends StatelessWidget {
             ),
           ),
 
-          SliverToBoxAdapter(child: _buildStatusSection(estado, colorEst)),
-          SliverToBoxAdapter(child: _buildInfoSection(nombreCliente)),
-          SliverToBoxAdapter(child: _buildQRSection(context, qrData, idReal)),
+          // 📋 CONTENIDO
           SliverToBoxAdapter(
-              child: _buildActionsSection(context, qrData, idReal)),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  _buildStatusSection(estado, colorEst),
+                  const SizedBox(height: 16),
+                  _buildInfoSection(nombreCliente),
+                  const SizedBox(height: 16),
+                  _buildQRSection(context, qrData, idReal),
+                  const SizedBox(height: 16),
+                  _buildActionsSection(context, qrData, idReal, nombreCliente),
+                  const SizedBox(height: 60), // Espacio final
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
+  // ==========================================
+  // 🟢 SECCIÓN DE ESTADO (Progress Bar)
+  // ==========================================
   Widget _buildStatusSection(String estado, Color colorEst) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colorEst.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colorEst.withValues(alpha: 0.25)),
-        ),
-        child: Row(
-          children: [
-            Icon(_iconoEstado(estado), color: colorEst, size: 28),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Estado actual',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 11,
-                    ),
-                  ),
-                  Text(
-                    _textoEstado(estado),
-                    style: TextStyle(
-                      color: colorEst,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colorEst.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorEst.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_iconoEstado(estado), color: colorEst, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('ESTADO ACTUAL', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    const SizedBox(height: 2),
+                    Text(_textoEstado(estado), style: TextStyle(color: colorEst, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
-            ),
-            _buildEstadoDots(estado),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildEstadoDots(estado, colorEst),
+        ],
       ),
     );
   }
 
-  Widget _buildEstadoDots(String estadoActual) {
+  Widget _buildEstadoDots(String estadoActual, Color colorEst) {
     final estados = ['pendiente', 'diagnosticado', 'en_reparacion', 'entregado'];
     final idx = estados.indexOf(estadoActual).clamp(0, estados.length - 1);
 
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: List.generate(estados.length, (i) {
         final completado = i <= idx;
-        return Container(
-          width: 10,
-          height: 10,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: completado
-                ? _colorEstado(estados[i])
-                : Colors.white.withValues(alpha: 0.15),
+        final ultimo = i == estados.length - 1;
+
+        return Expanded(
+          child: Row(
+            children: [
+              Container(
+                width: 14, height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: completado ? colorEst : Colors.white10,
+                  border: completado ? null : Border.all(color: Colors.white24),
+                  boxShadow: completado ? [BoxShadow(color: colorEst.withOpacity(0.5), blurRadius: 6)] : null,
+                ),
+              ),
+              if (!ultimo)
+                Expanded(
+                  child: Container(
+                    height: 2,
+                    color: completado ? colorEst.withOpacity(0.5) : Colors.white10,
+                  ),
+                ),
+            ],
           ),
         );
       }),
     );
   }
 
+  // ==========================================
+  // 📋 SECCIÓN DE FICHA TÉCNICA Y CLIENTE
+  // ==========================================
   Widget _buildInfoSection(String nombreCliente) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _seccionTitulo('Detalles tecnicos'),
-          const SizedBox(height: 10),
-          _infoTile(Icons.devices, 'Tipo', equipo['tipo_equipo'] ?? '-'),
-          _infoTile(Icons.business, 'Marca', equipo['marca'] ?? '-'),
-          _infoTile(Icons.phone_android, 'Modelo', equipo['modelo'] ?? '-'),
-          _infoTile(Icons.qr_code_2, 'N/S', equipo['numero_serie'] ?? '-'),
-          _infoTile(Icons.description, 'Descripcion',
-              equipo['descripcion'] ?? '-'),
+          const _SeccionTitulo(titulo: 'Datos del Propietario', icono: Icons.person_outline),
           const SizedBox(height: 16),
-          _seccionTitulo('Cliente'),
-          const SizedBox(height: 10),
-          _infoTile(Icons.person, 'Nombre', nombreCliente),
+          _infoTile(Icons.badge_outlined, 'Nombre / Razón Social', nombreCliente),
+          
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Divider(color: Colors.white12, height: 1),
+          ),
+
+          const _SeccionTitulo(titulo: 'Especificaciones Técnicas', icono: Icons.memory),
+          const SizedBox(height: 16),
+          _infoTile(Icons.devices_other, 'Tipo de Equipo', equipo['tipo_equipo'] ?? '-'),
+          _infoTile(Icons.branding_watermark_outlined, 'Marca de Fabricante', equipo['marca'] ?? '-'),
+          _infoTile(Icons.label_outline, 'Modelo', equipo['modelo'] ?? '-'),
+          _infoTile(Icons.qr_code, 'Número de Serie', equipo['numero_serie'] ?? '-'),
+          if ((equipo['descripcion'] ?? '').toString().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _infoTile(Icons.notes, 'Notas de Ingreso', equipo['descripcion'] ?? '-'),
+          ]
         ],
       ),
     );
   }
 
+  // ==========================================
+  // 📱 SECCIÓN DE CÓDIGO QR
+  // ==========================================
   Widget _buildQRSection(BuildContext context, String qrData, String idReal) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _seccionTitulo('Codigo QR'),
-          const SizedBox(height: 12),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: QrImageView(
-                data: qrData,
-                size: 180,
-                backgroundColor: Colors.white,
-              ),
+          const _SeccionTitulo(titulo: 'Trazabilidad', icono: Icons.qr_code_scanner),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+            child: QrImageView(
+              data: qrData,
+              size: 160,
+              backgroundColor: Colors.white,
             ),
           ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              'ID: #$idReal  |  S/N: ${equipo['numero_serie'] ?? '-'}',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
-                fontSize: 12,
-              ),
-            ),
-          ),
+          const SizedBox(height: 16),
+          Text('ID Interno: #$idReal', style: const TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          Text('S/N: ${equipo['numero_serie'] ?? '-'}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
         ],
       ),
     );
   }
 
-  Widget _buildActionsSection(BuildContext context, String qrData, String idReal) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _seccionTitulo('Acciones'),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _actionButton(
-                context,
-                Icons.print,
-                'Imprimir QR',
-                Colors.tealAccent,
-                () => _imprimirQR(context, idReal, _getNombreCliente()),
-              ),
-              _actionButton(
-                context,
-                Icons.receipt_long,
-                'Ver ingresos',
-                Colors.orangeAccent,
-                () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(context, '/ingresos',
-                      arguments: int.tryParse(idReal) ?? 0);
-                },
-              ),
-            ],
+  // ==========================================
+  // 🚀 SECCIÓN DE ACCIONES RÁPIDAS
+  // ==========================================
+  Widget _buildActionsSection(BuildContext context, String qrData, String idReal, String nombreCliente) {
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _imprimirQR(context, idReal, nombreCliente),
+            icon: const Icon(Icons.print, color: Colors.black),
+            label: const Text('Imprimir QR', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.tealAccent,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/ingresos', arguments: int.tryParse(idReal) ?? 0);
+            },
+            icon: const Icon(Icons.receipt_long, color: Colors.white),
+            label: const Text('Ver Ingreso', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _actionButton(BuildContext context, IconData icon, String label,
-      Color color, VoidCallback onTap) {
-    return ElevatedButton.icon(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color.withValues(alpha: 0.15),
-        foregroundColor: color,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      onPressed: onTap,
-    );
-  }
-
+  // --- Widgets Auxiliares ---
   Widget _infoTile(IconData icon, String label, String value) {
     if (value.trim().isEmpty || value == '-') return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: _colorModulo.withValues(alpha: 0.6), size: 20),
-          const SizedBox(width: 12),
+          Icon(icon, color: Colors.white24, size: 20),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    fontSize: 11,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                ),
+                Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.3)),
               ],
             ),
           ),
@@ -373,18 +357,9 @@ class EquipoDetalleScreen extends StatelessWidget {
     );
   }
 
-  Widget _seccionTitulo(String texto) {
-    return Text(
-      texto.toUpperCase(),
-      style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.4),
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1.5,
-      ),
-    );
-  }
-
+  // ===========================
+  // 🖨️ LÓGICA DE IMPRESIÓN PDF (Sin cambios)
+  // ===========================
   Future<void> _imprimirQR(BuildContext context, String idReal, String nombreCliente) async {
     try {
       final pdf = pw.Document();
@@ -405,10 +380,7 @@ class EquipoDetalleScreen extends StatelessWidget {
 
       pdf.addPage(
         pw.Page(
-          pageFormat: const PdfPageFormat(
-            80 * PdfPageFormat.mm,
-            50 * PdfPageFormat.mm,
-          ),
+          pageFormat: const PdfPageFormat(80 * PdfPageFormat.mm, 50 * PdfPageFormat.mm),
           margin: const pw.EdgeInsets.all(6),
           build: (pw.Context ctx) {
             return pw.Container(
@@ -419,44 +391,22 @@ class EquipoDetalleScreen extends StatelessWidget {
                 children: [
                   pw.Image(pw.MemoryImage(logoBytes), height: 28),
                   pw.SizedBox(height: 2),
-                  pw.Text(
-                    'GONTECH SOLUTIONS',
-                    style: pw.TextStyle(
-                      fontSize: 10,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.Text(
-                    nombreCliente,
-                    style:
-                        pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-                  ),
+                  pw.Text('GONTECH SOLUTIONS', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(nombreCliente, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
                   pw.SizedBox(height: 4),
                   pw.Divider(color: PdfColors.grey400, thickness: 0.3),
                   pw.SizedBox(height: 3),
-                  
                   pw.Text(
                     tituloEquipo.isEmpty ? 'Equipo sin especificar' : tituloEquipo,
-                    style: pw.TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
+                    style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                     textAlign: pw.TextAlign.center,
                   ),
-                  pw.Text(
-                    'Serie: ${numeroSerie.isEmpty ? '-' : numeroSerie}   ID: #$idReal',
-                    style: pw.TextStyle(fontSize: 7.5),
-                  ),
+                  pw.Text('Serie: ${numeroSerie.isEmpty ? '-' : numeroSerie}  ID: #$idReal', style: pw.TextStyle(fontSize: 7.5)),
                   pw.SizedBox(height: 4),
-                  pw.Image(pw.MemoryImage(imageBytes),
-                      width: 90, height: 90),
+                  pw.Image(pw.MemoryImage(imageBytes), width: 90, height: 90),
                   pw.SizedBox(height: 4),
                   pw.Divider(color: PdfColors.grey400, thickness: 0.3),
-                  pw.Text(
-                    'gontechsolutions.cl',
-                    style:
-                        pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
-                  ),
+                  pw.Text('gontechsolutions.cl', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
                 ],
               ),
             );
@@ -465,8 +415,7 @@ class EquipoDetalleScreen extends StatelessWidget {
       );
 
       final dir = Directory('/storage/emulated/0/Download');
-      final file =
-          File('${dir.path}/Etiqueta_Equipo_$idReal.pdf');
+      final file = File('${dir.path}/Etiqueta_Equipo_$idReal.pdf');
       await file.writeAsBytes(await pdf.save());
 
       if (context.mounted) {
@@ -474,18 +423,32 @@ class EquipoDetalleScreen extends StatelessWidget {
           SnackBar(
             content: Text('✅ PDF guardado: ${file.path}'),
             backgroundColor: Colors.tealAccent,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
       }
     }
+  }
+}
+
+// Auxiliar para Títulos
+class _SeccionTitulo extends StatelessWidget {
+  final String titulo;
+  final IconData icono;
+  const _SeccionTitulo({required this.titulo, required this.icono});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icono, color: Colors.white54, size: 20),
+        const SizedBox(width: 8),
+        Text(titulo.toUpperCase(), style: const TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1)),
+      ],
+    );
   }
 }

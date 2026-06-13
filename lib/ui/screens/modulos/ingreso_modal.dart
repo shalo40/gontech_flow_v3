@@ -297,7 +297,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                       Navigator.pop(context);
 
                       if (context.mounted) {
-                        await mostrarFirmaModal(context, idNuevoIngreso, 'ingreso', () {});
+                        await mostrarFirmaModal(context, idNuevoIngreso, 'ingreso' as Map<String, dynamic>, () {});
                       }
 
                       if (context.mounted) {
