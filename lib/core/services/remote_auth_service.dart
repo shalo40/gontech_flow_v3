@@ -1,5 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart'; // <-- Importante para el catch
+import 'package:dio/dio.dart';
 import '../network/api_client.dart';
 
 class RemoteAuthService {
@@ -7,6 +7,9 @@ class RemoteAuthService {
     final dio = await ApiClient.instance.dio;
     
     try {
+      // Imprimimos la URL exacta que está intentando golpear para confirmar
+      print('🚀 Intentando login en: ${dio.options.baseUrl}/auth/login');
+      
       final res = await dio.post(
         '/auth/login',
         data: {'email': correo, 'password': contrasena},
@@ -17,22 +20,33 @@ class RemoteAuthService {
       if (data is Map<String, dynamic> && data['token'] != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', data['token']);
+        print('✅ Login exitoso. Token guardado.');
         return data; 
       }
       return null;
       
     } catch (e) {
+      // --- BLOQUE DE DEPURACIÓN EXTREMA ---
+      print('🔥 ERROR CAPTURADO EN LOGIN 🔥');
+      print('Tipo de error crudo: ${e.runtimeType}');
+      print('Detalle crudo: $e');
+
       // 1. Verificamos si el error viene de la petición HTTP (Dio)
       if (e is DioException) {
+        print('DioException Type: ${e.type}');
+        print('DioException Message: ${e.message}');
+        print('DioException Error: ${e.error}');
+
         if (e.response != null) {
           final responseData = e.response!.data;
+          print('Status Code: ${e.response!.statusCode}');
+          print('Response Data: $responseData');
           
           // 2. Extraemos el mensaje específico de Laravel
           if (responseData is Map<String, dynamic>) {
             
             // Si es un error de validación (422) o nuestro mensaje personalizado (401/403)
             if (responseData.containsKey('message')) {
-              // Lanzamos la excepción con el mensaje exacto del backend
               throw Exception(responseData['message']);
             } 
             
@@ -46,8 +60,9 @@ class RemoteAuthService {
           // Error del servidor (ej. 500)
           throw Exception('Error del servidor: código ${e.response!.statusCode}');
         } else {
-          // Error de red (timeout, sin conexión al localhost)
-          throw Exception('No se pudo conectar con el servidor. Revisa tu red.');
+          // Si cae aquí, es porque NUNCA llegó al servidor (Error de certificado, DNS, o Timeout)
+          // Lanzamos el error real de Dio para que lo veas en el SnackBar en lugar del genérico
+          throw Exception('Fallo de conexión interno: ${e.message ?? e.error.toString()}');
         }
       }
       

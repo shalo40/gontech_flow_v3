@@ -32,9 +32,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es_CL', null);
 
-  // --- 1. CONFIGURACIÓN FORZADA PARA DESARROLLO (Backend Laravel) ---
+  // --- 1. CONFIGURACIÓN FORZADA PARA PRODUCCIÓN (Backend Laravel) ---
   await ApiConfig.setUseApiMode(true);
-  await ApiConfig.setBaseUrl('http://10.0.2.2:8000/api');
+  await ApiConfig.setBaseUrl('https://api.helpdesk.gontechsolutions.cl/api');
   // ------------------------------------------------------------------
 
   // --- 2. VERIFICACIÓN DE MODO ---

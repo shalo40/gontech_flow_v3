@@ -14,7 +14,7 @@ class ApiConfig {
 
   static Future<bool> useApiMode() async {
     final prefs = await SharedPreferences.getInstance();
-    return (prefs.getString(_kBackendMode) ?? modeLocal) == modeApi;
+return (prefs.getString(_kBackendMode) ?? modeApi) == modeApi;
   }
 
   static Future<void> setUseApiMode(bool enabled) async {
