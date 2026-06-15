@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:gontech_flow_v2/core/models/diagnostico.dart';
 import 'package:gontech_flow_v2/core/models/ingreso.dart';
 import 'package:gontech_flow_v2/core/models/reparacion.dart';
-import 'package:gontech_flow_v2/core/models/entrega.dart';
 import '../config/api_config.dart';
 import '../dao/cliente_dao.dart';
 import '../dao/equipo_dao.dart';

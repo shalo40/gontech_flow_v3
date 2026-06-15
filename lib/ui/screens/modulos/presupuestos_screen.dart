@@ -337,7 +337,7 @@ class _PresupuestosScreenState extends State<PresupuestosScreen> {
             Text(label),
           ],
         ),
-        labelStyle: TextStyle(color: activo ? Colors.black : Colors.white70, fontSize: 13, fontWeight: activo ? FontWeight.bold : Alignment.center == null ? FontWeight.bold : FontWeight.normal),
+        labelStyle: TextStyle(color: activo ? Colors.black : Colors.white70, fontSize: 13, fontWeight: activo ? FontWeight.bold : FontWeight.normal),
         selectedColor: Colors.tealAccent,
         backgroundColor: AppColors.fondo.withOpacity(0.4),
         selected: activo,
