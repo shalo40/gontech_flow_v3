@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/providers/helpdesk_provider.dart';
 import '../../theme/app_colors.dart';
-import 'repuesto_modal.dart';
 
 Future<void> mostrarDiagnosticoModal(BuildContext context, int idIngreso) async {
   final fallaCtrl = TextEditingController();

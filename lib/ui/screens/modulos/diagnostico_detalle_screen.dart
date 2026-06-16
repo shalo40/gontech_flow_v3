@@ -281,8 +281,9 @@ class _MiniBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     Color color = Colors.tealAccent;
     if (esRiesgo) {
-      if (valor == 'ALTO' || valor == 'CRITICO') color = Colors.redAccent;
-      else if (valor == 'MEDIO') color = Colors.orangeAccent;
+      if (valor == 'ALTO' || valor == 'CRITICO') {
+        color = Colors.redAccent;
+      } else if (valor == 'MEDIO') color = Colors.orangeAccent;
       else color = Colors.greenAccent;
     }
 

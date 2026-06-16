@@ -268,8 +268,9 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
         final fechaStr = fechaRaw != null ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(fechaRaw.toString())) : 'Reciente';
 
         Color colorEstado = Colors.amberAccent;
-        if (estado == 'finalizado') colorEstado = Colors.greenAccent;
-        else if (estado.contains('reparacion')) colorEstado = Colors.blueAccent;
+        if (estado == 'finalizado') {
+          colorEstado = Colors.greenAccent;
+        } else if (estado.contains('reparacion')) colorEstado = Colors.blueAccent;
 
         return Card(
           color: Colors.black26,
