@@ -42,10 +42,6 @@ class _EquiposScreenState extends State<EquiposScreen> {
     return 'Sin cliente';
   }
 
-  String _getIdEquipo(Map<String, dynamic> e) {
-    return (e['id_equipo'] ?? e['id'] ?? '').toString();
-  }
-
   String _getFecha(Map<String, dynamic> e) {
     final f = e['fecha_ingreso'] ?? e['created_at'] ?? 'Sin fecha';
     return f.toString().split('T').first;

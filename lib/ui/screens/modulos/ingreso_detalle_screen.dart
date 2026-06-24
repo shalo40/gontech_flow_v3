@@ -133,7 +133,7 @@ class _IngresoDetalleScreenState extends State<IngresoDetalleScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        '${_ingreso['tipo_equipo'] ?? 'Equipo'} ${_ingreso['marca'] ?? ''}',
+                        '${_ingreso['tipo_equipo'] ?? _ingreso['equipo']?['tipo_equipo'] ?? 'Equipo'} ${_ingreso['marca'] ?? _ingreso['equipo']?['marca'] ?? ''}'.trim(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
@@ -141,7 +141,7 @@ class _IngresoDetalleScreenState extends State<IngresoDetalleScreen> {
                         ),
                       ),
                       Text(
-                        _ingreso['nombre_cliente'] ?? 'Sin cliente',
+                        _ingreso['nombre_cliente'] ?? _ingreso['equipo']?['cliente']?['nombre'] ?? 'Sin cliente',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.6),
                           fontSize: 14,
@@ -242,12 +242,12 @@ class _IngresoDetalleScreenState extends State<IngresoDetalleScreen> {
           _infoTile(
             Icons.computer,
             'Equipo',
-            '${_ingreso['tipo_equipo'] ?? ''} ${_ingreso['marca'] ?? ''} ${_ingreso['modelo'] ?? ''}',
+            '${_ingreso['tipo_equipo'] ?? _ingreso['equipo']?['tipo_equipo'] ?? ''} ${_ingreso['marca'] ?? _ingreso['equipo']?['marca'] ?? ''} ${_ingreso['modelo'] ?? _ingreso['equipo']?['modelo'] ?? ''}'.trim(),
           ),
           _infoTile(
             Icons.person_outline,
             'Cliente',
-            _ingreso['nombre_cliente'] ?? 'Sin cliente',
+            _ingreso['nombre_cliente'] ?? _ingreso['equipo']?['cliente']?['nombre'] ?? 'Sin cliente',
           ),
           _infoTile(
             Icons.cable,

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../config/api_config.dart';
+import '../session/session_manager.dart';
 
 class ApiClient {
   ApiClient._internal();
@@ -25,6 +26,27 @@ class ApiClient {
       ),
     );
 
+    // Agregar interceptor para el token de autenticación
+    _dio!.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final token = await SessionManager().obtener_token();
+          if (token != null && token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          return handler.next(options);
+        },
+        onError: (DioException e, handler) async {
+          // Si el servidor responde 401 (No autorizado) podríamos cerrar sesión aquí
+          if (e.response?.statusCode == 401) {
+            // Manejo de token expirado o sesión inválida
+            await SessionManager().cerrar_sesion();
+          }
+          return handler.next(e);
+        },
+      ),
+    );
+
     return _dio!;
   }
-}
+}

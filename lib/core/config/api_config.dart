@@ -14,7 +14,8 @@ class ApiConfig {
 
   static Future<bool> useApiMode() async {
     final prefs = await SharedPreferences.getInstance();
-return (prefs.getString(_kBackendMode) ?? modeApi) == modeApi;
+    // Forzamos el modo local por defecto durante desarrollo
+    return (prefs.getString(_kBackendMode) ?? modeLocal) == modeApi;
   }
 
   static Future<void> setUseApiMode(bool enabled) async {
@@ -23,15 +24,9 @@ return (prefs.getString(_kBackendMode) ?? modeApi) == modeApi;
   }
 
   static Future<String> getBaseUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? savedUrl = prefs.getString(_kApiBaseUrl);
-    
-    // Si no hay nada guardado, decide automáticamente según el modo
-    if (savedUrl == null) {
-      final isApiMode = await useApiMode();
-      return isApiMode ? defaultProductionUrl : defaultLocalUrl;
-    }
-    return savedUrl.trim();
+    // Forzamos la conexión al entorno local ignorando SharedPreferences 
+    // para evitar que se conecte a produccion accidentalmente.
+    return defaultLocalUrl;
   }
 
   static Future<void> setBaseUrl(String url) async {

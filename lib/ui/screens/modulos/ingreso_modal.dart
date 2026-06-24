@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/providers/helpdesk_provider.dart';
 import '../../theme/app_colors.dart';
 import 'equipo_modal.dart';
-import 'firma_modal.dart'; 
 
 Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
   // 1. Forzamos la recarga ANTES de abrir el modal para garantizar que el desplegable tenga datos
@@ -296,9 +295,9 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
 
                       Navigator.pop(context);
 
-                      if (context.mounted) {
-                        await mostrarFirmaModal(context, idNuevoIngreso, 'ingreso' as Map<String, dynamic>, () {});
-                      }
+                      // if (context.mounted) {
+                      //   await mostrarFirmaModal(context, idNuevoIngreso, 'ingreso' as Map<String, dynamic>, () {});
+                      // }
 
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(

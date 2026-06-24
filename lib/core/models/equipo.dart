@@ -1,5 +1,4 @@
 // ignore_for_file: non_constant_identifier_names
-// ignore_for_file: non_constant_identifier_names
 
 class Equipo {
   final int? id_equipo;

@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import 'cliente_modal.dart';
 import 'ingreso_modal.dart';
 import 'ingreso_detalle_screen.dart';
+import 'documentos_cliente_screen.dart';
 
 class ClienteDetalleScreen extends StatefulWidget {
   final int idCliente;
@@ -52,8 +53,11 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
     final Map<String, Map<String, dynamic>> equipos = {};
     for (var i in ingresos) {
       final eq = i['equipo'];
-      if (eq != null && eq['id'] != null) {
-        equipos[eq['id'].toString()] = eq;
+      if (eq != null) {
+        final id = eq['id_equipo'] ?? eq['id'];
+        if (id != null) {
+          equipos[id.toString()] = eq;
+        }
       }
     }
     return equipos.values.toList();
@@ -103,7 +107,11 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
                   const SizedBox(height: 16),
                   // Módulo de Contacto
                   _buildContactoCard(cliente),
-                  
+
+                  const SizedBox(height: 16),
+                  // ─── BANNER: Acceso al Dossier de Documentos ────────────
+                  _buildDossierBanner(cliente),
+
                   const SizedBox(height: 24),
                   // Módulo de Equipos Registrados
                   const Text('Parque de Equipos', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -260,9 +268,9 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
     return Column(
       children: ingresos.map((i) {
         final estado = (i['estado'] ?? i['estado_ingreso'] ?? 'ingresado').toString().toLowerCase();
-        final equipoStr = i['equipo'] != null 
-            ? '${i['equipo']['tipo_equipo']} ${i['equipo']['marca']}' 
-            : '${i['tipo_equipo']} ${i['marca']}';
+        final tipoEq = i['equipo']?['tipo_equipo'] ?? i['tipo_equipo'] ?? 'Equipo';
+        final marcaEq = i['equipo']?['marca'] ?? i['marca'] ?? '';
+        final equipoStr = '$tipoEq $marcaEq'.trim();
         
         final fechaRaw = i['created_at'] ?? i['fecha_ingreso'];
         final fechaStr = fechaRaw != null ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(fechaRaw.toString())) : 'Reciente';
@@ -270,7 +278,7 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
         Color colorEstado = Colors.amberAccent;
         if (estado == 'finalizado') {
           colorEstado = Colors.greenAccent;
-        } else if (estado.contains('reparacion')) colorEstado = Colors.blueAccent;
+        } else if (estado.contains('reparacion')) { colorEstado = Colors.blueAccent; }
 
         return Card(
           color: Colors.black26,
@@ -313,6 +321,61 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
         border: Border.all(color: Colors.white10, style: BorderStyle.solid),
       ),
       child: Text(mensaje, textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13)),
+    );
+  }
+
+  /// Banner de acceso rápido al Dossier de Documentos del cliente
+  Widget _buildDossierBanner(Cliente cliente) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => DocumentosClienteScreen(cliente: cliente)),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.tealAccent.withOpacity(0.12),
+              Colors.tealAccent.withOpacity(0.04),
+            ],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.tealAccent.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.tealAccent.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.folder_copy_outlined, color: Colors.tealAccent, size: 24),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dossier de Documentos',
+                    style: TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Ingresos · Diagnósticos · Presupuestos · Informes · Entregas',
+                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.tealAccent, size: 22),
+          ],
+        ),
+      ),
     );
   }
 }

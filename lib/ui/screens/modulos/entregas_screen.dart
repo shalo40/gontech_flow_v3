@@ -337,7 +337,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
                       const Divider(color: Colors.white12, height: 20),
                       _InfoRowModal(label: 'RUT:', valor: e['rut_receptor'] ?? 'Sin RUT'),
                       const Divider(color: Colors.white12, height: 20),
-                      _InfoRowModal(label: 'Equipo / Trabajo:', valor: e['descripcion_reparacion'] ?? 'Detalle no disponible'),
+                      _InfoRowModal(label: 'Equipo / Trabajo:', valor: _getNested(e, 'descripcion_reparacion', ['reparacion', 'descripcion'], 'Detalle no disponible')),
                       const Divider(color: Colors.white12, height: 20),
                       _InfoRowModal(label: 'Fecha de Entrega:', valor: _formatearFecha(e['fecha_entrega'])),
                       if ((e['observaciones'] ?? '').isNotEmpty) ...[
@@ -392,9 +392,13 @@ class _EntregasScreenState extends State<EntregasScreen> {
                       label: const Text('Registrar Firma', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.tealAccent, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: () {
-                        // TODO: Abrir Modal de Firma
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abrir pad de firma... ✍️')));
+                        mostrarFirmaModal(
+                          context,
+                          _getId(e),
+                          e,
+                          _cargarDatos
+                        );
                       },
                     ),
                   )

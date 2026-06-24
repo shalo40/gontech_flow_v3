@@ -184,8 +184,8 @@ Future<void> mostrarInformeModal(
                             setStateModal(() => procesando = true);
 
                             final informeParaLaravel = {
-                              'diagnostico_id': diagnosticoSeleccionado,
-                              'tecnico_id': tecnicoSeleccionado,
+                              'id_diagnostico': diagnosticoSeleccionado,
+                              'id_tecnico': tecnicoSeleccionado,
                               'descripcion_general': descripcionCtrl.text.trim(),
                               'conclusiones': conclusionesCtrl.text.trim(),
                               'recomendaciones': recomendacionesCtrl.text.trim(),

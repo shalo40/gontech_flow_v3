@@ -23,7 +23,7 @@ Future<void> mostrarPresupuestoModal(
 
   // 2. Si existe, extraemos las horas y agregamos la Mano de Obra automáticamente
   if (diag.isNotEmpty) {
-    descripcionCtrl.text = 'Reparación según Diagnóstico #${diag['id']}';
+    descripcionCtrl.text = 'Reparación según Diagnóstico #${diag['id_diagnostico'] ?? diag['id']}';
     
     // Asumimos un valor base de hora técnica (puedes traer esto de Ajustes después)
     const valorHoraTecnica = 25000.0; // 25.000 CLP por hora
