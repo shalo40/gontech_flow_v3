@@ -47,6 +47,7 @@ Future<bool?> mostrarEquipoModal(
 
   File? fotoSeleccionada;
   final esEdicion = equipoExistente != null;
+  bool isSubmitting = false;
 
   return showDialog<bool>(
     context: context,
@@ -193,9 +194,18 @@ Future<bool?> mostrarEquipoModal(
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                icon: const Icon(Icons.save),
-                label: Text(esEdicion ? 'Guardar cambios' : 'Registrar equipo'),
-                onPressed: () async {
+                icon: isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.tealAccent,
+                        ),
+                      )
+                    : const Icon(Icons.save),
+                label: Text(isSubmitting ? 'Guardando...' : (esEdicion ? 'Guardar cambios' : 'Registrar equipo')),
+                onPressed: isSubmitting ? null : () async {
                   if (marcaCtrl.text.trim().isEmpty || modeloCtrl.text.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -221,6 +231,7 @@ Future<bool?> mostrarEquipoModal(
                   };
 
                   try {
+                    setState(() => isSubmitting = true);
                     final provider = context.read<HelpdeskProvider>();
 
                     if (esEdicion) {
@@ -245,6 +256,7 @@ Future<bool?> mostrarEquipoModal(
                       );
                     }
                   } catch (e) {
+                    setState(() => isSubmitting = false);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(

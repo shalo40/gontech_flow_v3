@@ -11,7 +11,7 @@ class ClienteDao {
   Future<void> crearTabla(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $_tabla (
-        id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
         rut TEXT,
         telefono TEXT,
@@ -63,7 +63,7 @@ class ClienteDao {
     final db = await dbProvider.database;
     final res = await db.query(
       _tabla,
-      where: 'id_cliente = ?',
+      where: 'id = ?',
       whereArgs: [id],
     );
     return res.isNotEmpty ? Cliente.fromMap(res.first) : null;
@@ -72,7 +72,7 @@ class ClienteDao {
   /// 🧹 Elimina un cliente
   Future<int> eliminar(int id) async {
     final db = await dbProvider.database;
-    return await db.delete(_tabla, where: 'id_cliente = ?', whereArgs: [id]);
+    return await db.delete(_tabla, where: 'id = ?', whereArgs: [id]);
   }
 
   /// ✏️ Actualiza un cliente existente
@@ -81,7 +81,7 @@ class ClienteDao {
     return await db.update(
       _tabla,
       cliente.toMap(),
-      where: 'id_cliente = ?',
+      where: 'id = ?',
       whereArgs: [cliente.idCliente],
     );
   }

@@ -187,7 +187,7 @@ class PdfBase {
                 qrData: qrData,
               ),
               pw.SizedBox(height: 16),
-              pw.Expanded(child: content),
+              pw.Container(width: double.infinity, child: content),
               pw.SizedBox(height: 12),
               footer(context),
             ],

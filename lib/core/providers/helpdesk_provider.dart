@@ -1,7 +1,9 @@
+// ignore_for_file: avoid_print
 import 'package:flutter/material.dart';
 import 'package:gontech_flow_v2/core/models/diagnostico.dart';
 import 'package:gontech_flow_v2/core/models/ingreso.dart';
 import 'package:gontech_flow_v2/core/models/reparacion.dart';
+import 'package:gontech_flow_v2/core/models/usuario.dart';     // ← para Lista<Usuario>
 import '../config/api_config.dart';
 import '../dao/cliente_dao.dart';
 import '../dao/equipo_dao.dart';
@@ -12,6 +14,7 @@ import '../dao/reparacion_dao.dart';
 import '../dao/repuesto_dao.dart';
 import '../dao/entrega_dao.dart';
 import '../dao/informe_dao.dart';
+import '../dao/usuario_dao.dart';                               // ← listarTecnicos
 import '../services/remote_dashboard_service.dart';
 import '../services/remote_cliente_service.dart';
 import '../services/remote_equipo_service.dart';
@@ -23,32 +26,35 @@ import '../services/remote_repuesto_service.dart';
 import '../services/remote_entrega_service.dart';
 import '../services/remote_informe_service.dart';
 import '../services/remote_ajuste_service.dart'; 
-import '../services/remote_documento_service.dart'; // <-- Importación del gestor de archivos
+import '../services/remote_documento_service.dart';
+import '../services/remote_usuario_service.dart';               // ← nuevo servicio
 import '../models/cliente.dart';
 
 class HelpdeskProvider extends ChangeNotifier {
-  final ClienteDao _clienteDao = ClienteDao();
-  final EquipoDao _equipoDao = EquipoDao();
-  final IngresoDAO _ingresoDao = IngresoDAO();
+  final ClienteDao _clienteDao         = ClienteDao();
+  final EquipoDao _equipoDao           = EquipoDao();
+  final IngresoDAO _ingresoDao         = IngresoDAO();
   final DiagnosticoDao _diagnosticoDao = DiagnosticoDao();
   final PresupuestoDao _presupuestoDao = PresupuestoDao();
-  final ReparacionDao _reparacionDao = ReparacionDao();
-  final RepuestoDao _repuestoDao = RepuestoDao();
-  final EntregaDao _entregasDao = EntregaDao();
-  final InformeDao _informeDao = InformeDao();
+  final ReparacionDao _reparacionDao   = ReparacionDao();
+  final RepuestoDao _repuestoDao       = RepuestoDao();
+  final EntregaDao _entregasDao        = EntregaDao();
+  final InformeDao _informeDao         = InformeDao();
+  final UsuarioDao _usuarioDao         = UsuarioDao();          // ← fallback offline
   
-  final RemoteDashboardService _remoteDashboard = RemoteDashboardService();
-  final RemoteClienteService _remoteCliente = RemoteClienteService();
-  final RemoteEquipoService _remoteEquipo = RemoteEquipoService();
-  final RemoteIngresoService _remoteIngreso = RemoteIngresoService();
+  final RemoteDashboardService _remoteDashboard     = RemoteDashboardService();
+  final RemoteClienteService _remoteCliente         = RemoteClienteService();
+  final RemoteEquipoService _remoteEquipo           = RemoteEquipoService();
+  final RemoteIngresoService _remoteIngreso         = RemoteIngresoService();
   final RemoteDiagnosticoService _remoteDiagnostico = RemoteDiagnosticoService();
   final RemotePresupuestoService _remotePresupuesto = RemotePresupuestoService();
-  final RemoteReparacionService _remoteReparacion = RemoteReparacionService();
-  final RemoteRepuestoService _remoteRepuesto = RemoteRepuestoService(); 
-  final RemoteEntregaService _remoteEntrega = RemoteEntregaService(); 
-  final RemoteInformeService _remoteInforme = RemoteInformeService();
-  final RemoteAjusteService _remoteAjuste = RemoteAjusteService(); 
-  final RemoteDocumentoService _remoteDocumento = RemoteDocumentoService(); // <-- Instancia del servicio
+  final RemoteReparacionService _remoteReparacion   = RemoteReparacionService();
+  final RemoteRepuestoService _remoteRepuesto       = RemoteRepuestoService(); 
+  final RemoteEntregaService _remoteEntrega         = RemoteEntregaService(); 
+  final RemoteInformeService _remoteInforme         = RemoteInformeService();
+  final RemoteAjusteService _remoteAjuste           = RemoteAjusteService(); 
+  final RemoteDocumentoService _remoteDocumento     = RemoteDocumentoService();
+  final RemoteUsuarioService _remoteUsuario         = RemoteUsuarioService(); // ← nuevo
 
   // Diccionario global de configuraciones (Key-Value)
   Map<String, dynamic> configuracion = {}; 
@@ -79,8 +85,10 @@ class HelpdeskProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get entregas => _entregas;
   List<Map<String, dynamic>> _informes = [];
   List<Map<String, dynamic>> get informes => _informes;
-  List<Map<String, dynamic>> _documentos = []; // <-- Lista global de documentos
+  List<Map<String, dynamic>> _documentos = [];
   List<Map<String, dynamic>> get documentos => _documentos;
+  List<Usuario> _tecnicos = [];                               // ← técnicos dinámicos
+  List<Usuario> get tecnicos => _tecnicos;
 
   // --- Estadísticas requeridas por estadisticas_screen ---
   int get reparacionesEnProceso => _reparaciones.where((r) => r['estado'] == 'en_proceso').length;
@@ -772,6 +780,24 @@ class HelpdeskProvider extends ChangeNotifier {
     await recargarRepuestos();
     await recargarEntregas(); 
     await recargarInformes();
-    await recargarDocumentos(); // <-- Sincronizado en el arranque
+    await recargarDocumentos();
+    await recargarTecnicos();  // ← sincroniza la lista de técnicos al arranque
+  }
+
+  // --- TÉCNICOS ---
+  /// Carga los usuarios con rol == 'tecnico' desde la API o desde SQLite local.
+  Future<void> recargarTecnicos() async {
+    try {
+      if (await ApiConfig.useApiMode()) {
+        _tecnicos = await _remoteUsuario.obtenerTecnicos();
+      } else {
+        _tecnicos = await _usuarioDao.listarTecnicos();
+      }
+    } catch (e) {
+      // No rompemos la app si falla; el modal mostrará lista vacía
+      debugPrint('⚠️ Error cargando técnicos: $e');
+      _tecnicos = [];
+    }
+    notifyListeners();
   }
 }

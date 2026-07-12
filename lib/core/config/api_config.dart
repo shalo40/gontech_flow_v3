@@ -1,43 +1,22 @@
-import 'package:shared_preferences/shared_preferences.dart';
-
 class ApiConfig {
-  static const String _kBackendMode = 'backend_mode';
-  static const String _kApiBaseUrl = 'api_base_url';
-
-  static const String modeLocal = 'local';
-  static const String modeApi = 'api';
-
-  // URL por defecto para desarrollo local (Emulador Android)
   static const String defaultLocalUrl = 'http://10.0.2.2:8000/api';
-  // URL de tu nuevo servidor productivo
   static const String defaultProductionUrl = 'https://api.helpdesk.gontechsolutions.cl/api';
 
+  // 🔥 LA REGLA DE ORO 🔥
+  // Mantenemos 'true' a la fuerza. Esto mantiene SQLite apagado y obliga a usar tu Laravel en cPanel.
   static Future<bool> useApiMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    // Forzamos el modo local por defecto durante desarrollo
-    return (prefs.getString(_kBackendMode) ?? modeLocal) == modeApi;
+    return true; 
   }
 
-  static Future<void> setUseApiMode(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kBackendMode, enabled ? modeApi : modeLocal);
-  }
-
+  // 📡 EL ENRUTAMIENTO (MODO PRODUCCIÓN)
+  // Forzamos la conexión a la nube (cPanel)
   static Future<String> getBaseUrl() async {
-    // Forzamos la conexión al entorno local ignorando SharedPreferences 
-    // para evitar que se conecte a produccion accidentalmente.
-    return defaultLocalUrl;
+    return defaultProductionUrl; // 👈 CAMBIO MAESTRO AQUÍ
   }
 
-  static Future<void> setBaseUrl(String url) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kApiBaseUrl, url.trim());
-  }
-
-  // Método helper para reiniciar a valores de fábrica si algo falla
-  static Future<void> resetToDefaults() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kBackendMode);
-    await prefs.remove(_kApiBaseUrl);
-  }
+  // 🛡️ MÉTODOS DE RELLENO (Defensivos)
+  // Los dejamos vacíos para evitar que algún estado residual de la app intente cambiar la ruta.
+  static Future<void> setUseApiMode(bool enabled) async {}
+  static Future<void> setBaseUrl(String url) async {}
+  static Future<void> resetToDefaults() async {}
 }

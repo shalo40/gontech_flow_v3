@@ -28,4 +28,17 @@ class UsuarioDao {
     map['contrasena'] = PasswordHasher.hash(usuario.contrasena);
     return db.insert(_tabla, map);
   }
+
+  /// Retorna los usuarios con rol == 'tecnico' para poblar dropdowns
+  /// en modo offline (SQLite local).
+  Future<List<Usuario>> listarTecnicos() async {
+    final db = await DatabaseHelper().database;
+    final res = await db.query(
+      _tabla,
+      where: 'rol = ?',
+      whereArgs: ['tecnico'],
+    );
+    return res.map((row) => Usuario.fromMap(row)).toList();
+  }
 }
+

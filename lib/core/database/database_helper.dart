@@ -28,7 +28,7 @@ class DatabaseHelper {
     final path = join(await getDatabasesPath(), 'gontech_flow_v3.db');
     return await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -133,6 +133,41 @@ class DatabaseHelper {
       await _createInformes(db);
       debugPrint('✅ Tabla informes creada en migracion v10.');
     }
+
+    // --- v11: REESCRITURA DE ESQUEMAS DESINCRONIZADOS ---
+    // Se recrean clientes, tareas, historial y usuarios con columnas alineadas
+    // a los toMap() actuales de cada modelo (el error era: 'table clientes has no column named id').
+    if (oldVersion < 11) {
+      debugPrint('⬆️ v11: Recreando tablas con esquema sincronizado...');
+
+      // Clientes: PK cambia de id_cliente -> id
+      await db.execute('DROP TABLE IF EXISTS clientes;');
+      await _createClientes(db);
+      debugPrint('✅ Tabla clientes recreada con PK id.');
+
+      // Tareas: esquema completamente rediseñado
+      await db.execute('DROP TABLE IF EXISTS tareas;');
+      await _createTareas(db);
+      debugPrint('✅ Tabla tareas recreada con nuevo esquema.');
+
+      // Historial: esquema completamente rediseñado
+      await db.execute('DROP TABLE IF EXISTS historial;');
+      await _createHistorial(db);
+      debugPrint('✅ Tabla historial recreada con nuevo esquema.');
+
+      // Usuarios: agrega columnas creado_en y actualizado_en
+      final columnasUsuarios = await db.rawQuery('PRAGMA table_info(usuarios)');
+      if (!columnasUsuarios.any((c) => c['name'] == 'creado_en')) {
+        await db.execute("ALTER TABLE usuarios ADD COLUMN creado_en TEXT DEFAULT CURRENT_TIMESTAMP;");
+        debugPrint('✅ Columna creado_en agregada a usuarios.');
+      }
+      if (!columnasUsuarios.any((c) => c['name'] == 'actualizado_en')) {
+        await db.execute("ALTER TABLE usuarios ADD COLUMN actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP;");
+        debugPrint('✅ Columna actualizado_en agregada a usuarios.');
+      }
+
+      debugPrint('✅ Migración v11 completada.');
+    }
   }
 
   Future<void> _migratePasswords(Database db) async {
@@ -158,9 +193,10 @@ class DatabaseHelper {
   // ============================================================
 
   Future<void> _createClientes(Database db) async {
+    // ⚠️ PK usa 'id' para coincidir con Cliente.toMap() -> {'id': idCliente, ...}
     await db.execute('''
       CREATE TABLE IF NOT EXISTS clientes (
-        id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
         rut TEXT,
         telefono TEXT,
@@ -331,42 +367,50 @@ class DatabaseHelper {
   }
 
   Future<void> _createUsuarios(Database db) async {
+    // ⚠️ Incluye creado_en y actualizado_en para coincidir con Usuario.toMap()
     await db.execute('''
       CREATE TABLE IF NOT EXISTS usuarios (
         id_usuario INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT,
         correo TEXT,
         contrasena TEXT,
-        rol TEXT DEFAULT 'tecnico'
+        rol TEXT DEFAULT 'tecnico',
+        creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
   }
 
   Future<void> _createTareas(Database db) async {
+    // ⚠️ Esquema alineado con Tarea.toMap(): id, reparacion_id, observaciones, completada_en, created_at
     await db.execute('''
       CREATE TABLE IF NOT EXISTS tareas (
-        id_tarea INTEGER PRIMARY KEY AUTOINCREMENT,
-        id_reparacion INTEGER,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reparacion_id INTEGER,
         descripcion TEXT,
         estado TEXT DEFAULT 'pendiente',
-        fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-        fecha_fin TEXT,
-        FOREIGN KEY (id_reparacion) REFERENCES reparaciones(id_reparacion) ON DELETE CASCADE
+        observaciones TEXT,
+        completada_en TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (reparacion_id) REFERENCES reparaciones(id_reparacion) ON DELETE CASCADE
       );
     ''');
   }
 
   Future<void> _createHistorial(Database db) async {
+    // ⚠️ Esquema alineado con Historial.toMap(): id, entidad_tipo, entidad_id, accion,
+    //    descripcion, estado_anterior, estado_nuevo, usuario_nombre, created_at
     await db.execute('''
       CREATE TABLE IF NOT EXISTS historial (
-        id_historial INTEGER PRIMARY KEY AUTOINCREMENT,
-        id_usuario INTEGER,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entidad_tipo TEXT,
+        entidad_id INTEGER,
         accion TEXT,
-        entidad TEXT,
-        id_entidad INTEGER,
-        fecha_accion TEXT DEFAULT CURRENT_TIMESTAMP,
         descripcion TEXT,
-        FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE SET NULL
+        estado_anterior TEXT,
+        estado_nuevo TEXT,
+        usuario_nombre TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
   }

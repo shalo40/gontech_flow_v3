@@ -18,6 +18,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
   
   int? idEquipoSeleccionado;
   File? fotoEvidencia; 
+  bool isSubmitting = false;
 
   final opcionesAccesorios = [
     'Cargador', 'Cable USB', 'Funda / Estuche', 'Mouse', 'Teclado', 'Bolso'
@@ -239,9 +240,18 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                   foregroundColor: Colors.tealAccent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                icon: const Icon(Icons.save),
-                label: const Text('Registrar'),
-                onPressed: () async {
+                icon: isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.tealAccent,
+                        ),
+                      )
+                    : const Icon(Icons.save),
+                label: Text(isSubmitting ? 'Guardando...' : 'Registrar'),
+                onPressed: isSubmitting ? null : () async {
                   if (idEquipoSeleccionado == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('⚠️ Selecciona un equipo para el ingreso.')),
@@ -266,19 +276,30 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                   final estadoFisico = obsCtrl.text.trim().isEmpty ? 'Sin detalles físicos' : obsCtrl.text.trim();
                   final observacionesCombinadas = 'FALLA REPORTADA:\n$motivoFalla\n\nESTADO FÍSICO:\n$estadoFisico';
 
+                  // Bug 1: fecha en formato MySQL estricto (yyyy-MM-dd HH:mm:ss)
+                  // toIso8601String() produce '2026-07-12T...' que MySQL DATETIME rechaza.
+                  final now = DateTime.now();
+                  final fechaMysql =
+                      '${now.year.toString().padLeft(4, '0')}-'
+                      '${now.month.toString().padLeft(2, '0')}-'
+                      '${now.day.toString().padLeft(2, '0')} '
+                      '${now.hour.toString().padLeft(2, '0')}:'
+                      '${now.minute.toString().padLeft(2, '0')}:'
+                      '${now.second.toString().padLeft(2, '0')}';
+
                   final ingresoData = {
-                    'equipo_id': idEquipoSeleccionado,
-                    'id_equipo': idEquipoSeleccionado,
-                    'fecha_ingreso': DateTime.now().toIso8601String(),
+                    'equipo_id'            : idEquipoSeleccionado,
+                    'id_equipo'            : idEquipoSeleccionado,
+                    'fecha_ingreso'        : fechaMysql,   // ← 'yyyy-MM-dd HH:mm:ss'
                     'accesorios_entregados': totalAccesorios.join(', '),
-                    'accesorios': totalAccesorios.join(', '),
-                    'observaciones': observacionesCombinadas,
-                    // 👇 VOLVEMOS A 'pendiente' PARA QUE MYSQL NO LO RECHACE
-                    'estado_ingreso': 'pendiente', 
-                    'estado': 'pendiente',
-                      };
+                    'accesorios'           : totalAccesorios.join(', '),
+                    'observaciones'        : observacionesCombinadas,
+                    'estado_ingreso'       : 'pendiente',
+                    'estado'               : 'pendiente',
+                  };
 
                   try {
+                    setModalState(() => isSubmitting = true);
                     final exito = await provider.agregarIngreso(ingresoData);
 
                     if (exito && context.mounted) {
@@ -315,6 +336,7 @@ Future<void> mostrarIngresoModal(BuildContext context, int idCliente) async {
                       }
                     }
                   } catch (e) {
+                    setModalState(() => isSubmitting = false);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('❌ Error en el flujo: $e'), backgroundColor: Colors.redAccent),

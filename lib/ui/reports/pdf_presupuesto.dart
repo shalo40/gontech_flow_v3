@@ -334,15 +334,18 @@ class PdfPresupuesto {
     );
 
   static pw.Widget _firmaBox(String label) {
-    return pw.Expanded(
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.SizedBox(height: 28),
-          pw.Container(height: 0.5, color: PdfTema.colorTextoSec),
-          pw.SizedBox(height: 4),
-          pw.Text(label, style: PdfTema.small()),
-        ],
+    return pw.Flexible(
+      child: pw.SizedBox(
+        width: double.infinity,
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.SizedBox(height: 28),
+            pw.Container(height: 0.5, color: PdfTema.colorTextoSec),
+            pw.SizedBox(height: 4),
+            pw.Text(label, style: PdfTema.small()),
+          ],
+        ),
       ),
     );
   }

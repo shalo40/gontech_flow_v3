@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../session/session_manager.dart';
 
@@ -30,7 +31,10 @@ class ApiClient {
     _dio!.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await SessionManager().obtener_token();
+          // Extraemos el pase VIP directamente desde SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          final token = prefs.getString('auth_token');
+          
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
@@ -49,4 +53,4 @@ class ApiClient {
 
     return _dio!;
   }
-}
+}

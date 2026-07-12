@@ -32,13 +32,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es_CL', null);
 
-  // --- 1. CONFIGURACIÓN FORZADA PARA PRODUCCIÓN (Backend Laravel) ---
-  await ApiConfig.setUseApiMode(true);
-  await ApiConfig.setBaseUrl('https://api.helpdesk.gontechsolutions.cl/api');
+  // --- 1. CONFIGURACIÓN PARA PRODUCCIÓN (Backend Laravel) ---
+  // La configuración se define en core/config/api_config.dart
   // ------------------------------------------------------------------
 
   // --- 2. VERIFICACIÓN DE MODO ---
-  final bool useApi = await ApiConfig.useApiMode();
+  final bool useApi = false; // Set to false for local mode, true for API mode
 
   if (!useApi) {
     // Si NO estamos usando la API, cargamos la base de datos local y los mockups
